@@ -270,6 +270,26 @@
     .theme-moon { display: inline-flex; line-height: 0; }
     html.dark .theme-sun { display: inline-flex; }
     html.dark .theme-moon { display: none; }
+
+    /* Terms modal */
+    .terms-overlay { display:none;position:fixed;inset:0;z-index:150;background:rgba(0 0 0/0.55);align-items:center;justify-content:center;padding:1rem;backdrop-filter:blur(2px); }
+    .terms-overlay.open { display:flex; }
+    .terms-dialog { background:var(--right-bg);border:1px solid var(--input-border);border-radius:1rem;max-width:620px;width:100%;max-height:88vh;display:flex;flex-direction:column;box-shadow:0 24px 48px rgba(0 0 0/0.35);animation:slideUp 0.2s ease; }
+    @keyframes slideUp { from{opacity:0;transform:translateY(16px);}to{opacity:1;transform:translateY(0);} }
+    .terms-dialog-header { padding:1.125rem 1.375rem;border-bottom:1px solid var(--input-border);display:flex;align-items:center;justify-content:space-between;gap:1rem;flex-shrink:0; }
+    .terms-dialog-body { overflow-y:auto;padding:1.25rem 1.375rem;flex:1; }
+    .terms-dialog-footer { padding:0.875rem 1.375rem;border-top:1px solid var(--input-border);display:flex;justify-content:flex-end;flex-shrink:0; }
+    .terms-section-title { font-size:0.8125rem;font-weight:700;color:var(--text);margin:1.125rem 0 0.375rem; }
+    .terms-section-title:first-child { margin-top:0; }
+    .terms-p { font-size:0.8125rem;color:var(--text-muted);line-height:1.7;margin-bottom:0.5rem; }
+    .terms-li { font-size:0.8125rem;color:var(--text-muted);line-height:1.65;padding-left:1rem;position:relative;margin-bottom:0.3rem; }
+    .terms-li::before { content:'•';position:absolute;left:0;color:rgb(var(--accent));font-size:0.875rem; }
+    .terms-note { background:rgba(var(--accent)/0.08);border:1px solid rgba(var(--accent)/0.2);border-radius:0.5rem;padding:0.625rem 0.875rem;font-size:0.8rem;color:var(--text-muted);margin:0.5rem 0 0.75rem;line-height:1.5; }
+    .terms-note strong { color:var(--text); }
+    .terms-close-btn { background:none;border:none;cursor:pointer;color:var(--text-muted);padding:0.25rem;border-radius:0.375rem;display:flex;align-items:center;transition:color 0.15s; }
+    .terms-close-btn:hover { color:var(--text); }
+    .terms-btn { padding:0.5rem 1.125rem;border-radius:0.5rem;font-size:0.875rem;font-weight:600;cursor:pointer;font-family:'Plus Jakarta Sans',sans-serif;border:none;background:var(--input-bg);color:var(--text-muted);border:1px solid var(--input-border); }
+    .terms-btn:hover { opacity:0.85; }
   </style>
 </head>
 <body>
@@ -328,6 +348,114 @@
       </form>
 
       <p class="bottom-link">Don't have an account? <a href="/member/signup.html">Create one</a></p>
+      <p style="text-align:center;margin-top:0.875rem;font-size:0.8rem;color:var(--text-sub);">
+        By using CloudFolio, you agree to our <a href="#" id="open-terms-link" style="color:rgb(var(--accent));text-decoration:none;font-weight:500;">Terms and Conditions</a>.
+      </p>
+    </div>
+  </div>
+
+  <!-- Terms and Conditions Modal -->
+  <div id="terms-overlay" class="terms-overlay" role="dialog" aria-modal="true" aria-labelledby="terms-dialog-title">
+    <div class="terms-dialog">
+      <div class="terms-dialog-header">
+        <div>
+          <div style="font-family:'Crimson Pro',Georgia,serif;font-size:1.25rem;font-weight:700;color:var(--heading);" id="terms-dialog-title">Terms and Conditions of Use</div>
+          <div style="font-size:0.75rem;color:var(--text-muted);margin-top:0.125rem;">CloudFolio Library · Effective May 8, 2026 · Version 1.0</div>
+        </div>
+        <button class="terms-close-btn" id="terms-close-x" aria-label="Close"><i data-lucide="x" style="width:18px;height:18px;"></i></button>
+      </div>
+      <div class="terms-dialog-body">
+        <div class="terms-note" style="margin-top:0;">By borrowing any material through CloudFolio, you confirm that you have read, understood, and agreed to all terms — including fines, overdue penalties, and borrowing conditions.</div>
+
+        <div class="terms-section-title">1. Introduction</div>
+        <p class="terms-p">CloudFolio is a digital Library Management System (LMS) operated to facilitate the cataloguing, borrowing, and return of library materials. These Terms and Conditions ("Terms") govern access to and use of the CloudFolio platform by registered library members ("Borrower", "User", or "You").</p>
+        <p class="terms-p">These Terms apply exclusively to borrowing activities and shall be in force for every loan transaction created through CloudFolio.</p>
+
+        <div class="terms-section-title">2. Eligibility and Registration</div>
+        <p class="terms-p">To borrow materials through CloudFolio, you must:</p>
+        <div class="terms-li">Be a duly registered member of the institution's library.</div>
+        <div class="terms-li">Provide accurate personal information during account registration.</div>
+        <div class="terms-li">Keep your account credentials confidential and not share them with others.</div>
+        <div class="terms-li">Be at least 13 years of age, or have parental/guardian consent if younger.</div>
+        <p class="terms-p" style="margin-top:0.5rem;">CloudFolio reserves the right to suspend or terminate accounts that violate registration policies or provide false information.</p>
+
+        <div class="terms-section-title">3. Borrowing Rules and Loan Periods</div>
+        <p class="terms-p" style="font-weight:600;color:var(--heading);">3.1 Loan Duration</p>
+        <p class="terms-p">Standard loan periods:</p>
+        <div class="terms-li">General Circulation Materials: <strong>7 calendar days</strong></div>
+        <div class="terms-li">Reference and Reserve Materials: <strong>3 calendar days</strong></div>
+        <div class="terms-li">Special Collections: As specified per item</div>
+        <p class="terms-p" style="font-weight:600;color:var(--heading);margin-top:0.75rem;">3.2 Renewal Policy</p>
+        <p class="terms-p">A borrower may renew a loan once, provided no holds exist, the item was not previously renewed, the renewal is before the due date, and the borrower has no outstanding fines or suspensions.</p>
+
+        <div class="terms-section-title">4. Overdue Materials and Fine Computation</div>
+        <p class="terms-p">Fines begin accruing at 12:00 AM on the first day following the due date.</p>
+        <p class="terms-p" style="font-weight:600;color:var(--heading);">4.1 Fine Rate Schedule</p>
+        <div style="overflow-x:auto;margin:0.5rem 0 0.75rem;">
+          <table style="width:100%;border-collapse:collapse;font-size:0.775rem;color:var(--text-muted);">
+            <thead>
+              <tr style="background:rgba(var(--accent)/0.08);color:var(--heading);font-weight:600;">
+                <th style="padding:0.5rem 0.625rem;text-align:left;border:1px solid var(--input-border);">Overdue Period</th>
+                <th style="padding:0.5rem 0.625rem;text-align:left;border:1px solid var(--input-border);">Category</th>
+                <th style="padding:0.5rem 0.625rem;text-align:center;border:1px solid var(--input-border);">Fine / Day</th>
+                <th style="padding:0.5rem 0.625rem;text-align:center;border:1px solid var(--input-border);">Max Cap</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr><td rowspan="2" style="padding:0.4rem 0.625rem;border:1px solid var(--input-border);">1 – 7 days</td><td style="padding:0.4rem 0.625rem;border:1px solid var(--input-border);">General Circulation</td><td style="padding:0.4rem 0.625rem;border:1px solid var(--input-border);text-align:center;">₱5.00</td><td style="padding:0.4rem 0.625rem;border:1px solid var(--input-border);text-align:center;">₱35.00</td></tr>
+              <tr><td style="padding:0.4rem 0.625rem;border:1px solid var(--input-border);">Reference / Reserve</td><td style="padding:0.4rem 0.625rem;border:1px solid var(--input-border);text-align:center;">₱10.00</td><td style="padding:0.4rem 0.625rem;border:1px solid var(--input-border);text-align:center;">₱70.00</td></tr>
+              <tr><td rowspan="2" style="padding:0.4rem 0.625rem;border:1px solid var(--input-border);">8 – 14 days</td><td style="padding:0.4rem 0.625rem;border:1px solid var(--input-border);">General Circulation</td><td style="padding:0.4rem 0.625rem;border:1px solid var(--input-border);text-align:center;">₱10.00</td><td style="padding:0.4rem 0.625rem;border:1px solid var(--input-border);text-align:center;">₱140.00</td></tr>
+              <tr><td style="padding:0.4rem 0.625rem;border:1px solid var(--input-border);">Reference / Reserve</td><td style="padding:0.4rem 0.625rem;border:1px solid var(--input-border);text-align:center;">₱20.00</td><td style="padding:0.4rem 0.625rem;border:1px solid var(--input-border);text-align:center;">₱280.00</td></tr>
+              <tr><td rowspan="2" style="padding:0.4rem 0.625rem;border:1px solid var(--input-border);">15 – 30 days</td><td style="padding:0.4rem 0.625rem;border:1px solid var(--input-border);">General Circulation</td><td style="padding:0.4rem 0.625rem;border:1px solid var(--input-border);text-align:center;">₱15.00</td><td style="padding:0.4rem 0.625rem;border:1px solid var(--input-border);text-align:center;">₱450.00</td></tr>
+              <tr><td style="padding:0.4rem 0.625rem;border:1px solid var(--input-border);">Reference / Reserve</td><td style="padding:0.4rem 0.625rem;border:1px solid var(--input-border);text-align:center;">₱25.00</td><td style="padding:0.4rem 0.625rem;border:1px solid var(--input-border);text-align:center;">₱750.00</td></tr>
+              <tr><td style="padding:0.4rem 0.625rem;border:1px solid var(--input-border);">30+ days</td><td style="padding:0.4rem 0.625rem;border:1px solid var(--input-border);">All categories</td><td colspan="2" style="padding:0.4rem 0.625rem;border:1px solid var(--input-border);text-align:center;">Replacement cost (full value)</td></tr>
+            </tbody>
+          </table>
+        </div>
+        <div class="terms-note"><strong>Formula:</strong> Total Fine = Fine Rate Per Day × Number of Overdue Days (not to exceed the applicable cap)<br><em>Example: General Circulation book, 7 days overdue → 7 × ₱5.00 = ₱35.00</em></div>
+
+        <div class="terms-section-title">5. Notifications and Reminders</div>
+        <div class="terms-li">3 days before due date — Reminder notice</div>
+        <div class="terms-li">1 day before due date — Urgent reminder</div>
+        <div class="terms-li">On the due date — Final return reminder</div>
+        <div class="terms-li">1 day after — Overdue notice with fine accrual start</div>
+        <div class="terms-li">Every 7 days thereafter — Escalating overdue notice</div>
+        <p class="terms-p" style="margin-top:0.5rem;">Failure to receive a notification does not exempt a borrower from applicable fines.</p>
+
+        <div class="terms-section-title">6. Payment of Fines</div>
+        <div class="terms-li">CloudFolio online payment portal (GCash, Maya, credit/debit card)</div>
+        <div class="terms-li">Over-the-counter payment at the library circulation desk</div>
+        <div class="terms-li">Institutional billing (for employees or students under institutional accounts)</div>
+        <p class="terms-p" style="margin-top:0.5rem;">Borrowers with unpaid fines of ₱100.00 or more will have their borrowing privileges suspended until cleared.</p>
+
+        <div class="terms-section-title">7. Lost, Damaged, or Unreturned Materials</div>
+        <div class="terms-li">Borrower must pay the full replacement cost plus all accrued fines.</div>
+        <div class="terms-li">Account will be suspended until full payment is made.</div>
+        <div class="terms-li">Replacement cost = market price + 20% administrative handling fee.</div>
+
+        <div class="terms-section-title">8. Dispute Resolution</div>
+        <p class="terms-p">Dispute Requests must be submitted within 14 days via the CloudFolio Help &amp; Support portal. Administration decisions are final. System logs are the primary source of truth.</p>
+
+        <div class="terms-section-title">9. User Responsibilities</div>
+        <div class="terms-li">Return borrowed materials on or before the Loan Due Date.</div>
+        <div class="terms-li">Handle materials with care; return in the same condition received.</div>
+        <div class="terms-li">Report lost or damaged items to the library at the earliest opportunity.</div>
+        <div class="terms-li">Keep account information accurate and settle all outstanding fines promptly.</div>
+        <div class="terms-li">Do not transfer or lend borrowed materials to any other person.</div>
+
+        <div class="terms-section-title">10. Privacy and Data Use</div>
+        <p class="terms-p">Personal data is protected in accordance with the <strong>Data Privacy Act of 2012 (Republic Act No. 10173)</strong> of the Philippines. Data will not be shared with third parties except as required by law.</p>
+
+        <div class="terms-section-title">11. Amendments &amp; Governing Law</div>
+        <p class="terms-p">These Terms may be updated with 14 days' notice via registered email. These Terms are governed by the laws of the Republic of the Philippines.</p>
+
+        <div class="terms-section-title">Borrower Acknowledgment</div>
+        <div class="terms-note">By using CloudFolio, I confirm that I have read, understood, and agree to abide by these Terms and Conditions in their entirety.</div>
+        <p class="terms-p" style="margin-top:0.625rem;font-size:0.75rem;color:var(--text-sub);text-align:center;">CloudFolio Library Management System · support@cloudfolio.edu · cloudfolio.edu</p>
+      </div>
+      <div class="terms-dialog-footer">
+        <button class="terms-btn" id="terms-close-btn">Close</button>
+      </div>
     </div>
   </div>
 
@@ -392,6 +520,13 @@
         submitBtn.innerHTML = 'Sign In';
       }
     });
+
+    const termsOverlay = document.getElementById('terms-overlay');
+    document.getElementById('open-terms-link').addEventListener('click', e => { e.preventDefault(); termsOverlay.classList.add('open'); });
+    document.getElementById('terms-close-x').addEventListener('click', () => termsOverlay.classList.remove('open'));
+    document.getElementById('terms-close-btn').addEventListener('click', () => termsOverlay.classList.remove('open'));
+    termsOverlay.addEventListener('click', e => { if (e.target === termsOverlay) termsOverlay.classList.remove('open'); });
+    document.addEventListener('keydown', e => { if (e.key === 'Escape') termsOverlay.classList.remove('open'); });
 
     ['email', 'password'].forEach(id => {
       document.getElementById(id).addEventListener('input', function() {

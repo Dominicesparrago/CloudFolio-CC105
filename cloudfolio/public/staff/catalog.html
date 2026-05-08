@@ -53,7 +53,13 @@
       <div class="card">
         <div class="card-header">
           <span class="card-title">Book Catalog</span>
-          <span id="filter-count" style="font-size:0.8125rem;color:rgb(var(--text-muted));"></span>
+          <div style="display:flex;align-items:center;gap:0.75rem;">
+            <span id="filter-count" style="font-size:0.8125rem;color:rgb(var(--text-muted));"></span>
+            <button id="btn-add-book" class="btn btn-primary btn-sm" style="gap:0.375rem;">
+              <i data-lucide="plus" style="width:14px;height:14px;"></i>
+              Add Book
+            </button>
+          </div>
         </div>
         <div class="filter-bar">
           <div style="position:relative;flex:1;min-width:200px;max-width:320px;">
@@ -104,14 +110,13 @@
       return `<span class="badge" style="background:rgba(var(--danger)/0.12);color:rgb(var(--danger));">On Loan</span>`;
     }
 
+    let listenersAttached = false;
+
     function populateCategories(books) {
       const cats = [...new Set(books.map(b => b.category).filter(Boolean))].sort();
       const sel = document.getElementById('filter-category');
-      cats.forEach(c => {
-        const o = document.createElement('option');
-        o.value = c; o.textContent = c;
-        sel.appendChild(o);
-      });
+      while (sel.options.length > 1) sel.remove(1);
+      cats.forEach(c => { const o = document.createElement('option'); o.value = c; o.textContent = c; sel.appendChild(o); });
     }
 
     function applyFilters() {
@@ -131,16 +136,80 @@
       document.getElementById('filter-count').textContent = `${filtered.length} of ${allBooks.length} items`;
     }
 
+    function openAddBookModal() {
+      openModal('Add Book to Catalog', `
+        <div class="form-group"><label class="form-label">Title *</label>
+          <input type="text" id="add-title" class="form-control" placeholder="Book title">
+          <div class="form-error" id="add-title-error"></div></div>
+        <div class="form-group"><label class="form-label">Author *</label>
+          <input type="text" id="add-author" class="form-control" placeholder="Author name">
+          <div class="form-error" id="add-author-error"></div></div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:0.75rem;">
+          <div class="form-group"><label class="form-label">Type *</label>
+            <select id="add-type" class="form-control">
+              <option value="book">Book</option>
+              <option value="magazine">Magazine</option>
+              <option value="dvd">DVD</option>
+              <option value="other">Other</option>
+            </select></div>
+          <div class="form-group"><label class="form-label">Total Copies *</label>
+            <input type="number" id="add-copies" class="form-control" value="1" min="1" max="99">
+            <div class="form-error" id="add-copies-error"></div></div>
+        </div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:0.75rem;">
+          <div class="form-group"><label class="form-label">Call No</label>
+            <input type="text" id="add-callno" class="form-control" placeholder="e.g. FIC-010"></div>
+          <div class="form-group"><label class="form-label">Published Year</label>
+            <input type="number" id="add-year" class="form-control" placeholder="e.g. 2024" min="1000" max="2099"></div>
+        </div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:0.75rem;">
+          <div class="form-group"><label class="form-label">Category</label>
+            <input type="text" id="add-category" class="form-control" placeholder="e.g. Fiction"></div>
+          <div class="form-group"><label class="form-label">ISBN</label>
+            <input type="text" id="add-isbn" class="form-control" placeholder="978-..."></div>
+        </div>
+      `, {
+        confirmText: 'Add Book',
+        onConfirm: async () => {
+          const title = document.getElementById('add-title').value.trim();
+          const author = document.getElementById('add-author').value.trim();
+          const type = document.getElementById('add-type').value;
+          const copies = document.getElementById('add-copies').value;
+          const callNo = document.getElementById('add-callno').value.trim();
+          const year = document.getElementById('add-year').value.trim();
+          const category = document.getElementById('add-category').value.trim();
+          const isbn = document.getElementById('add-isbn').value.trim();
+
+          let valid = true;
+          if (!title) { document.getElementById('add-title-error').textContent = 'Title is required.'; valid = false; }
+          if (!author) { document.getElementById('add-author-error').textContent = 'Author is required.'; valid = false; }
+          if (!copies || parseInt(copies) < 1) { document.getElementById('add-copies-error').textContent = 'At least 1 copy required.'; valid = false; }
+          if (!valid) return;
+
+          const btn = document.getElementById('modal-confirm-btn');
+          btn.disabled = true; btn.innerHTML = '<span class="spinner"></span> Adding…';
+          try {
+            await API.post('/books', { title, author, type, total_copies: copies, call_no: callNo || null, published_year: year || null, category: category || null, isbn: isbn || null });
+            showToast('Book added to catalog!', 'success');
+            closeModal();
+            load();
+          } catch (err) {
+            showToast(err.message || 'Failed to add book.', 'error');
+            btn.disabled = false; btn.innerHTML = 'Add Book';
+          }
+        }
+      });
+    }
+
     async function load() {
       try {
         allBooks = await API.get('/books');
 
         const totalCopies = allBooks.reduce((s, b) => s + b.total_copies, 0);
         const availCopies = allBooks.reduce((s, b) => s + b.available_copies, 0);
-        const onLoanCopies = totalCopies - availCopies;
         document.getElementById('stat-titles').textContent = allBooks.length;
         document.getElementById('stat-avail').textContent = availCopies;
-        document.getElementById('stat-loan').textContent = onLoanCopies;
+        document.getElementById('stat-loan').textContent = totalCopies - availCopies;
         document.getElementById('stat-copies').textContent = totalCopies;
         lucide.createIcons({ nodes: [document.getElementById('stat-row')] });
 
@@ -163,17 +232,21 @@
         lucide.createIcons({ nodes: [document.getElementById('catalog-table')] });
         document.getElementById('filter-count').textContent = `${allBooks.length} items`;
 
-        ['search-input', 'filter-type', 'filter-category', 'filter-avail'].forEach(id => {
-          const el = document.getElementById(id);
-          el.addEventListener(el.tagName === 'INPUT' ? 'input' : 'change', applyFilters);
-        });
-        document.getElementById('btn-clear').addEventListener('click', () => {
-          document.getElementById('search-input').value = '';
-          document.getElementById('filter-type').value = '';
-          document.getElementById('filter-category').value = '';
-          document.getElementById('filter-avail').value = '';
-          applyFilters();
-        });
+        if (!listenersAttached) {
+          listenersAttached = true;
+          ['search-input', 'filter-type', 'filter-category', 'filter-avail'].forEach(id => {
+            const el = document.getElementById(id);
+            el.addEventListener(el.tagName === 'INPUT' ? 'input' : 'change', applyFilters);
+          });
+          document.getElementById('btn-clear').addEventListener('click', () => {
+            document.getElementById('search-input').value = '';
+            document.getElementById('filter-type').value = '';
+            document.getElementById('filter-category').value = '';
+            document.getElementById('filter-avail').value = '';
+            applyFilters();
+          });
+          document.getElementById('btn-add-book').addEventListener('click', openAddBookModal);
+        }
       } catch (err) {
         document.getElementById('catalog-table').innerHTML = `<div style="padding:2rem;text-align:center;color:rgb(var(--danger));">Failed to load catalog.</div>`;
       }

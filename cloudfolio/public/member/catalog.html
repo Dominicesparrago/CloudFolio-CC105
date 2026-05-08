@@ -89,6 +89,20 @@
       <p style="font-size:0.875rem;color:rgb(var(--text-muted));">Browse the library collection</p>
     </div>
 
+    <!-- Upcoming Feature Banner -->
+    <div style="background:linear-gradient(135deg,rgba(var(--accent)/0.07),rgba(var(--info)/0.05));border:1px solid rgba(var(--accent)/0.2);border-radius:0.875rem;padding:1rem 1.25rem;margin-bottom:1.5rem;display:flex;align-items:center;gap:1rem;flex-wrap:wrap;">
+      <div style="width:42px;height:42px;border-radius:0.75rem;background:rgba(var(--accent)/0.12);display:flex;align-items:center;justify-content:center;flex-shrink:0;">
+        <i data-lucide="calendar-clock" style="width:20px;height:20px;color:rgb(var(--accent));"></i>
+      </div>
+      <div style="flex:1;min-width:0;">
+        <div style="display:flex;align-items:center;gap:0.5rem;margin-bottom:0.25rem;flex-wrap:wrap;">
+          <span style="font-size:0.9375rem;font-weight:700;color:rgb(var(--text-primary));">Online Reservation — Coming Soon</span>
+          <span style="padding:0.2rem 0.625rem;border-radius:999px;font-size:0.7rem;font-weight:700;letter-spacing:0.05em;text-transform:uppercase;background:rgba(var(--accent)/0.15);color:rgb(var(--accent));border:1px solid rgba(var(--accent)/0.25);">Stay Tuned</span>
+        </div>
+        <p style="font-size:0.8125rem;color:rgb(var(--text-muted));line-height:1.5;margin:0;">Reserve books online and pick them up at the library at your convenience — available in the next version.</p>
+      </div>
+    </div>
+
     <!-- Search + filters bar -->
     <div style="display:flex;flex-wrap:wrap;gap:0.75rem;align-items:center;margin-bottom:1.25rem;">
       <div style="position:relative;flex:1;min-width:220px;max-width:380px;">
@@ -194,6 +208,11 @@
             ${categoryBadge(b.category)}
             <span style="margin-left:auto;font-size:0.75rem;color:rgb(var(--text-muted));">${b.available_copies}/${b.total_copies} available</span>
           </div>
+          <button class="btn-reserve-soon" style="width:100%;padding:0.5rem;border-radius:0.5rem;border:1px dashed rgba(var(--accent)/0.35);background:rgba(var(--accent)/0.04);color:rgb(var(--accent));font-size:0.8rem;font-weight:600;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:0.4rem;transition:background 0.15s,border-color 0.15s;font-family:inherit;">
+            <i data-lucide="calendar-clock" style="width:13px;height:13px;"></i>
+            Reserve
+            <span style="padding:0.125rem 0.5rem;border-radius:999px;font-size:0.65rem;font-weight:700;letter-spacing:0.04em;text-transform:uppercase;background:rgba(var(--accent)/0.15);margin-left:0.125rem;">Soon</span>
+          </button>
         </div>
       `).join('');
       lucide.createIcons({ nodes: [grid] });
@@ -248,6 +267,12 @@
       } catch (err) {
         document.getElementById('loading-state').innerHTML = `<span style="color:rgb(var(--danger));">Failed to load catalog.</span>`;
       }
+
+      document.getElementById('book-grid').addEventListener('click', e => {
+        if (e.target.closest('.btn-reserve-soon')) {
+          showToast('Online Reservation is coming soon — stay tuned!', 'info');
+        }
+      });
 
       document.getElementById('search-input').addEventListener('input', applyFilters);
       document.getElementById('filter-type').addEventListener('change', applyFilters);
