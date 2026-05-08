@@ -1,0 +1,223 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Members — CloudFolio Admin</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800&family=Crimson+Pro:ital,wght@0,400;0,600;0,700;1,400&family=Courier+Prime:wght@400;700&display=swap" rel="stylesheet">
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>tailwind.config = { darkMode: 'class' }</script>
+  <link rel="stylesheet" href="/css/main.css">
+  <script src="/js/theme.js"></script>
+  <script src="/js/api.js"></script>
+  <script src="/js/toast.js"></script>
+  <script src="/js/ui.js"></script>
+  <script src="https://unpkg.com/lucide@latest/dist/umd/lucide.js"></script>
+</head>
+<body data-page-title="Member Accounts">
+  <div id="sidebar-container"></div>
+  <div class="main-content">
+    <div id="topbar-container"></div>
+    <div class="page-body fade-in">
+      <div class="card">
+        <div class="card-header">
+          <span class="card-title">Member Accounts</span>
+          <button id="btn-create-member" class="btn btn-primary btn-sm" style="gap:0.375rem;">
+            <i data-lucide="user-plus" style="width:14px;height:14px;"></i>
+            Create Member
+          </button>
+        </div>
+        <div class="filter-bar">
+          <select id="filter-status" class="form-control" style="max-width:160px;">
+            <option value="">All Statuses</option>
+            <option value="active">Active</option>
+            <option value="suspended">Suspended</option>
+            <option value="inactive">Inactive</option>
+          </select>
+          <input type="text" id="search-input" class="form-control" placeholder="Search by name or email..." style="max-width:280px;">
+          <button id="btn-clear" class="btn btn-ghost btn-sm">Clear</button>
+        </div>
+        <div id="members-table"></div>
+      </div>
+    </div>
+  </div>
+
+  <script>window.PAGE_TITLE = 'Member Accounts';</script>
+  <script src="/js/admin-layout.js"></script>
+  <script>
+    lucide.createIcons();
+
+    let allMembers = [];
+    let tableCtrl = null;
+
+    function applyFilters() {
+      const status = document.getElementById('filter-status').value;
+      const search = document.getElementById('search-input').value.toLowerCase();
+      const filtered = allMembers.filter(m => {
+        const matchStatus = !status || m.status === status;
+        const matchSearch = !search || m.name.toLowerCase().includes(search) || m.email.toLowerCase().includes(search) || (m.phone && m.phone.includes(search));
+        return matchStatus && matchSearch;
+      });
+      if (tableCtrl) tableCtrl.update(filtered);
+    }
+
+    async function loadMembers() {
+      try {
+        allMembers = await API.get('/members');
+        tableCtrl = renderTable('members-table', [
+          { key: 'id', label: 'ID', render: v => `<span class="mono" style="font-size:0.75rem;color:rgb(var(--text-muted));">#${v}</span>` },
+          { key: 'name', label: 'Name', render: v => `<span style="font-weight:600;">${v}</span>` },
+          { key: 'email', label: 'Email', render: v => `<span style="font-size:0.8125rem;">${v}</span>` },
+          { key: 'phone', label: 'Phone', render: v => v || '—' },
+          { key: 'active_loans', label: 'Active Loans', render: v => `<span style="font-weight:600;">${v}</span>` },
+          { key: 'pending_fines', label: 'Pending Fines', render: v => v > 0 ? `<span style="color:rgb(var(--danger));font-weight:600;">${formatCurrency(v)}</span>` : formatCurrency(v) },
+          { key: 'status', label: 'Status', render: v => statusBadge(v) },
+          { key: 'id', label: 'Actions', sortable: false, render: (v, row) => `
+            <div style="display:flex;gap:0.375rem;">
+              <button class="btn btn-ghost btn-sm action-edit" data-id="${v}" style="color:rgb(var(--info));">
+                <i data-lucide="pencil" style="width:13px;height:13px;"></i> Edit
+              </button>
+              ${row.status === 'active' ? `<button class="btn btn-ghost btn-sm action-suspend" data-id="${v}" style="color:rgb(var(--danger));">Suspend</button>` : ''}
+              ${row.status === 'suspended' ? `<button class="btn btn-ghost btn-sm action-activate" data-id="${v}" style="color:rgb(var(--success));">Activate</button>` : ''}
+            </div>
+          `}
+        ], allMembers, { onRowClick: row => showMemberDrawer(row), emptyMessage: 'No members found.' });
+
+        document.getElementById('members-table').addEventListener('click', async e => {
+          const editBtn = e.target.closest('.action-edit');
+          const suspendBtn = e.target.closest('.action-suspend');
+          const activateBtn = e.target.closest('.action-activate');
+
+          if (editBtn) { e.stopPropagation(); const m = allMembers.find(m => m.id == editBtn.dataset.id); if (m) openEditModal(m); }
+          if (suspendBtn) {
+            e.stopPropagation();
+            if (!confirm('Suspend this member?')) return;
+            suspendBtn.disabled = true;
+            try { await API.put('/members/' + suspendBtn.dataset.id, { status: 'suspended' }); showToast('Member suspended.', 'success'); loadMembers(); }
+            catch (err) { showToast(err.message, 'error'); suspendBtn.disabled = false; }
+          }
+          if (activateBtn) {
+            e.stopPropagation();
+            activateBtn.disabled = true;
+            try { await API.put('/members/' + activateBtn.dataset.id, { status: 'active' }); showToast('Member activated!', 'success'); loadMembers(); }
+            catch (err) { showToast(err.message, 'error'); activateBtn.disabled = false; }
+          }
+        });
+
+        lucide.createIcons();
+      } catch (err) { showToast('Failed to load members.', 'error'); }
+    }
+
+    async function showMemberDrawer(member) {
+      openDrawer('Member Details', `<div style="color:rgb(var(--text-muted));">Loading...</div>`);
+      try {
+        const data = await API.get('/members/' + member.id);
+        const activeLoans = data.loans.filter(l => l.status !== 'returned');
+        const pendingFines = data.fines.filter(f => f.status === 'pending');
+        const loansHTML = activeLoans.length ? activeLoans.map(l => `
+          <div style="padding:0.5rem 0;border-bottom:1px solid rgb(var(--border));">
+            <div style="font-weight:600;font-size:0.875rem;">${l.item_title}</div>
+            <div style="font-size:0.75rem;color:rgb(var(--text-muted));display:flex;gap:0.5rem;margin-top:0.25rem;">
+              <span>Due: ${formatDate(l.due_date)}</span>${statusBadge(l.status)}
+            </div>
+          </div>
+        `).join('') : '<div style="color:rgb(var(--text-muted));font-size:0.875rem;padding:0.5rem 0;">No active loans.</div>';
+
+        document.getElementById('drawer-body').innerHTML = `
+          <div>
+            <div style="display:flex;align-items:center;gap:0.75rem;margin-bottom:1.25rem;">
+              <div style="width:48px;height:48px;border-radius:50%;background:rgba(var(--info)/0.15);display:flex;align-items:center;justify-content:center;">
+                <i data-lucide="user" style="width:22px;height:22px;color:rgb(var(--info));"></i>
+              </div>
+              <div>
+                <div style="font-family:'Crimson Pro',serif;font-size:1.125rem;font-weight:700;">${data.name}</div>
+                <div style="font-size:0.8125rem;color:rgb(var(--text-muted));">${data.email}</div>
+              </div>
+              ${statusBadge(data.status)}
+            </div>
+            <div class="detail-row"><span class="detail-label">Member ID</span><span class="detail-value mono">#${data.id}</span></div>
+            <div class="detail-row"><span class="detail-label">Phone</span><span class="detail-value">${data.phone || '—'}</span></div>
+            <div class="detail-row"><span class="detail-label">Member Since</span><span class="detail-value">${formatDate(data.created_at)}</span></div>
+            <div class="detail-row"><span class="detail-label">Active Loans</span><span class="detail-value">${activeLoans.length}</span></div>
+            <div class="detail-row"><span class="detail-label">Pending Fines</span><span class="detail-value" style="color:rgb(var(--danger));font-weight:600;">${formatCurrency(pendingFines.reduce((s,f)=>s+f.amount,0))}</span></div>
+            <div style="margin-top:1.25rem;">
+              <div style="font-family:'Crimson Pro',serif;font-size:1rem;font-weight:600;margin-bottom:0.625rem;">Active Loans</div>
+              ${loansHTML}
+            </div>
+            <div style="margin-top:1rem;display:flex;gap:0.5rem;">
+              <button class="btn btn-secondary btn-sm" onclick="openEditModal(${JSON.stringify(data).replace(/"/g,'&quot;')})">
+                <i data-lucide="pencil" style="width:13px;height:13px;"></i> Edit
+              </button>
+            </div>
+          </div>
+        `;
+        lucide.createIcons();
+      } catch (err) {
+        document.getElementById('drawer-body').innerHTML = `<div class="alert alert-danger">Failed to load member details.</div>`;
+      }
+    }
+
+    function openEditModal(member) {
+      openModal('Edit Member', `
+        <div class="form-group"><label class="form-label">Full Name</label><input type="text" id="edit-name" class="form-control" value="${member.name}"></div>
+        <div class="form-group"><label class="form-label">Email</label><input type="email" id="edit-email" class="form-control" value="${member.email}"></div>
+        <div class="form-group"><label class="form-label">Phone</label><input type="tel" id="edit-phone" class="form-control" value="${member.phone || ''}"></div>
+        <div class="form-group"><label class="form-label">Status</label>
+          <select id="edit-status" class="form-control">
+            <option value="active" ${member.status==='active'?'selected':''}>Active</option>
+            <option value="suspended" ${member.status==='suspended'?'selected':''}>Suspended</option>
+            <option value="inactive" ${member.status==='inactive'?'selected':''}>Inactive</option>
+          </select>
+        </div>
+      `, {
+        confirmText: 'Save Changes',
+        onConfirm: async () => {
+          const name = document.getElementById('edit-name').value.trim();
+          const email = document.getElementById('edit-email').value.trim();
+          const phone = document.getElementById('edit-phone').value.trim();
+          const status = document.getElementById('edit-status').value;
+          if (!name || !email) { showToast('Name and email are required.', 'error'); return; }
+          const btn = document.getElementById('modal-confirm-btn');
+          btn.disabled = true; btn.innerHTML = '<span class="spinner"></span> Saving...';
+          try { await API.put('/members/' + member.id, { name, email, phone: phone||null, status }); showToast('Member updated!', 'success'); closeModal(); loadMembers(); }
+          catch (err) { showToast(err.message, 'error'); btn.disabled = false; btn.innerHTML = 'Save Changes'; }
+        }
+      });
+    }
+
+    function openCreateModal() {
+      openModal('Create Member', `
+        <div class="form-group"><label class="form-label">Full Name *</label><input type="text" id="create-name" class="form-control" placeholder="Full name" required><div class="form-error" id="create-name-error"></div></div>
+        <div class="form-group"><label class="form-label">Email *</label><input type="email" id="create-email" class="form-control" placeholder="Email address" required><div class="form-error" id="create-email-error"></div></div>
+        <div class="form-group"><label class="form-label">Phone</label><input type="tel" id="create-phone" class="form-control" placeholder="09XX XXX XXXX"></div>
+        <div class="form-group"><label class="form-label">Password *</label><input type="password" id="create-password" class="form-control" placeholder="At least 6 characters" required><div class="form-error" id="create-password-error"></div></div>
+      `, {
+        confirmText: 'Create Member',
+        onConfirm: async () => {
+          const name = document.getElementById('create-name').value.trim();
+          const email = document.getElementById('create-email').value.trim();
+          const phone = document.getElementById('create-phone').value.trim();
+          const password = document.getElementById('create-password').value;
+          let valid = true;
+          if (!name) { document.getElementById('create-name-error').textContent = 'Name required.'; valid = false; }
+          if (!email) { document.getElementById('create-email-error').textContent = 'Email required.'; valid = false; }
+          if (!password || password.length < 6) { document.getElementById('create-password-error').textContent = 'Password must be at least 6 characters.'; valid = false; }
+          if (!valid) return;
+          const btn = document.getElementById('modal-confirm-btn');
+          btn.disabled = true; btn.innerHTML = '<span class="spinner"></span> Creating...';
+          try { await API.post('/members', { name, email, phone: phone||null, password }); showToast('Member created!', 'success'); closeModal(); loadMembers(); }
+          catch (err) { showToast(err.message, 'error'); btn.disabled = false; btn.innerHTML = 'Create Member'; }
+        }
+      });
+    }
+
+    document.getElementById('btn-create-member').addEventListener('click', openCreateModal);
+    document.getElementById('filter-status').addEventListener('change', applyFilters);
+    document.getElementById('search-input').addEventListener('input', applyFilters);
+    document.getElementById('btn-clear').addEventListener('click', () => { document.getElementById('filter-status').value=''; document.getElementById('search-input').value=''; applyFilters(); });
+
+    loadMembers();
+  </script>
+</body>
+</html>

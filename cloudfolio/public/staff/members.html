@@ -1,0 +1,222 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Members — CloudFolio Staff</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800&family=Crimson+Pro:ital,wght@0,400;0,600;0,700;1,400&family=Courier+Prime:wght@400;700&display=swap" rel="stylesheet">
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>tailwind.config = { darkMode: 'class' }</script>
+  <link rel="stylesheet" href="/css/main.css">
+  <script src="/js/theme.js"></script>
+  <script src="/js/api.js"></script>
+  <script src="/js/toast.js"></script>
+  <script src="/js/ui.js"></script>
+  <script src="https://unpkg.com/lucide@latest/dist/umd/lucide.js"></script>
+</head>
+<body data-page-title="Member Accounts">
+  <div id="sidebar-container"></div>
+  <div class="main-content">
+    <div id="topbar-container"></div>
+    <div class="page-body fade-in">
+      <div class="card">
+        <div class="card-header">
+          <span class="card-title">Member Accounts</span>
+        </div>
+        <div class="filter-bar">
+          <select id="filter-status" class="form-control" style="max-width:160px;">
+            <option value="">All Statuses</option>
+            <option value="active">Active</option>
+            <option value="suspended">Suspended</option>
+            <option value="inactive">Inactive</option>
+          </select>
+          <input type="text" id="search-input" class="form-control" placeholder="Search by name or email..." style="max-width:280px;">
+          <button id="btn-clear" class="btn btn-ghost btn-sm">Clear</button>
+        </div>
+        <div id="members-table"></div>
+      </div>
+    </div>
+  </div>
+
+  <script>window.PAGE_TITLE = 'Member Accounts';</script>
+  <script src="/js/staff-layout.js"></script>
+  <script>
+    lucide.createIcons();
+
+    let allMembers = [];
+    let tableCtrl = null;
+
+    function applyFilters() {
+      const status = document.getElementById('filter-status').value;
+      const search = document.getElementById('search-input').value.toLowerCase();
+      const filtered = allMembers.filter(m => {
+        const matchStatus = !status || m.status === status;
+        const matchSearch = !search ||
+          m.name.toLowerCase().includes(search) ||
+          m.email.toLowerCase().includes(search) ||
+          (m.phone && m.phone.includes(search));
+        return matchStatus && matchSearch;
+      });
+      if (tableCtrl) tableCtrl.update(filtered);
+    }
+
+    async function loadMembers() {
+      try {
+        allMembers = await API.get('/members');
+        tableCtrl = renderTable('members-table', [
+          { key: 'id', label: 'ID', render: v => `<span class="mono" style="font-size:0.75rem;color:rgb(var(--text-muted));">#${v}</span>` },
+          { key: 'name', label: 'Name', render: v => `<span style="font-weight:600;">${v}</span>` },
+          { key: 'email', label: 'Email', render: v => `<span style="font-size:0.8125rem;">${v}</span>` },
+          { key: 'phone', label: 'Phone', render: v => v || '—' },
+          { key: 'active_loans', label: 'Active Loans', render: v => `<span style="font-weight:600;">${v}</span>` },
+          { key: 'pending_fines', label: 'Pending Fines', render: v => v > 0 ? `<span style="color:rgb(var(--danger));font-weight:600;">${formatCurrency(v)}</span>` : formatCurrency(v) },
+          { key: 'status', label: 'Status', render: v => statusBadge(v) },
+          { key: 'id', label: 'Actions', sortable: false, render: (v, row) => `
+            <button class="btn btn-ghost btn-sm action-edit" data-id="${v}" style="color:rgb(var(--info));">
+              <i data-lucide="pencil" style="width:13px;height:13px;"></i> Edit
+            </button>
+          `}
+        ], allMembers, {
+          onRowClick: row => showMemberDrawer(row),
+          emptyMessage: 'No members found.'
+        });
+
+        document.getElementById('members-table').addEventListener('click', e => {
+          const editBtn = e.target.closest('.action-edit');
+          if (editBtn) {
+            e.stopPropagation();
+            const member = allMembers.find(m => m.id == editBtn.dataset.id);
+            if (member) openEditModal(member);
+          }
+        });
+
+        lucide.createIcons();
+      } catch (err) {
+        showToast('Failed to load members.', 'error');
+      }
+    }
+
+    async function showMemberDrawer(member) {
+      openDrawer('Member Details', `<div style="color:rgb(var(--text-muted));font-size:0.875rem;">Loading...</div>`);
+      try {
+        const data = await API.get('/members/' + member.id);
+        const activeLoans = data.loans.filter(l => l.status !== 'returned');
+        const pendingFines = data.fines.filter(f => f.status === 'pending');
+        const loansHTML = activeLoans.length ? activeLoans.map(l => `
+          <div style="padding:0.5rem 0;border-bottom:1px solid rgb(var(--border));">
+            <div style="font-weight:600;font-size:0.875rem;">${l.item_title}</div>
+            <div style="font-size:0.75rem;color:rgb(var(--text-muted));display:flex;gap:0.5rem;margin-top:0.25rem;">
+              <span>Due: ${formatDate(l.due_date)}</span>
+              ${statusBadge(l.status)}
+            </div>
+          </div>
+        `).join('') : '<div style="color:rgb(var(--text-muted));font-size:0.875rem;padding:0.5rem 0;">No active loans.</div>';
+
+        const finesHTML = pendingFines.length ? pendingFines.map(f => `
+          <div style="padding:0.5rem 0;border-bottom:1px solid rgb(var(--border));display:flex;justify-content:space-between;">
+            <span style="font-size:0.875rem;">${f.reason || f.item_title || '—'}</span>
+            <span style="font-weight:600;color:rgb(var(--danger));">${formatCurrency(f.amount)}</span>
+          </div>
+        `).join('') : '<div style="color:rgb(var(--text-muted));font-size:0.875rem;padding:0.5rem 0;">No pending fines.</div>';
+
+        document.getElementById('drawer-body').innerHTML = `
+          <div>
+            <div style="display:flex;align-items:center;gap:0.75rem;margin-bottom:1.25rem;">
+              <div style="width:48px;height:48px;border-radius:50%;background:rgba(var(--info)/0.15);display:flex;align-items:center;justify-content:center;flex-shrink:0;">
+                <i data-lucide="user" style="width:22px;height:22px;color:rgb(var(--info));"></i>
+              </div>
+              <div>
+                <div style="font-family:'Crimson Pro',serif;font-size:1.125rem;font-weight:700;">${data.name}</div>
+                <div style="font-size:0.8125rem;color:rgb(var(--text-muted));">${data.email}</div>
+              </div>
+              ${statusBadge(data.status)}
+            </div>
+            <div style="display:flex;flex-direction:column;gap:0;margin-bottom:1.25rem;">
+              <div class="detail-row"><span class="detail-label">Member ID</span><span class="detail-value mono">#${data.id}</span></div>
+              <div class="detail-row"><span class="detail-label">Phone</span><span class="detail-value">${data.phone || '—'}</span></div>
+              <div class="detail-row"><span class="detail-label">Member Since</span><span class="detail-value">${formatDate(data.created_at)}</span></div>
+              <div class="detail-row"><span class="detail-label">Active Loans</span><span class="detail-value">${activeLoans.length}</span></div>
+              <div class="detail-row"><span class="detail-label">Pending Fines</span><span class="detail-value" style="color:rgb(var(--danger));font-weight:600;">${formatCurrency(pendingFines.reduce((s,f)=>s+f.amount,0))}</span></div>
+            </div>
+            <div style="margin-bottom:1.25rem;">
+              <div style="font-family:'Crimson Pro',serif;font-size:1rem;font-weight:600;margin-bottom:0.625rem;">Active Loans</div>
+              ${loansHTML}
+            </div>
+            <div>
+              <div style="font-family:'Crimson Pro',serif;font-size:1rem;font-weight:600;margin-bottom:0.625rem;">Pending Fines</div>
+              ${finesHTML}
+            </div>
+            <div style="margin-top:1.25rem;">
+              <button class="btn btn-secondary btn-sm" onclick="openEditModal(${JSON.stringify(data).replace(/"/g, '&quot;')})">
+                <i data-lucide="pencil" style="width:13px;height:13px;"></i> Edit Member
+              </button>
+            </div>
+          </div>
+        `;
+        lucide.createIcons();
+      } catch (err) {
+        document.getElementById('drawer-body').innerHTML = `<div class="alert alert-danger">Failed to load member details.</div>`;
+      }
+    }
+
+    function openEditModal(member) {
+      openModal('Edit Member', `
+        <div class="form-group">
+          <label class="form-label">Full Name</label>
+          <input type="text" id="edit-name" class="form-control" value="${member.name}">
+        </div>
+        <div class="form-group">
+          <label class="form-label">Email</label>
+          <input type="email" id="edit-email" class="form-control" value="${member.email}">
+        </div>
+        <div class="form-group">
+          <label class="form-label">Phone</label>
+          <input type="tel" id="edit-phone" class="form-control" value="${member.phone || ''}">
+        </div>
+        <div class="form-group">
+          <label class="form-label">Status</label>
+          <select id="edit-status" class="form-control">
+            <option value="active" ${member.status === 'active' ? 'selected' : ''}>Active</option>
+            <option value="suspended" ${member.status === 'suspended' ? 'selected' : ''}>Suspended</option>
+            <option value="inactive" ${member.status === 'inactive' ? 'selected' : ''}>Inactive</option>
+          </select>
+        </div>
+      `, {
+        confirmText: 'Save Changes',
+        onConfirm: async () => {
+          const name = document.getElementById('edit-name').value.trim();
+          const email = document.getElementById('edit-email').value.trim();
+          const phone = document.getElementById('edit-phone').value.trim();
+          const status = document.getElementById('edit-status').value;
+
+          if (!name || !email) { showToast('Name and email are required.', 'error'); return; }
+
+          const confirmBtn = document.getElementById('modal-confirm-btn');
+          confirmBtn.disabled = true; confirmBtn.innerHTML = '<span class="spinner"></span> Saving...';
+
+          try {
+            await API.put('/members/' + member.id, { name, email, phone: phone || null, status });
+            showToast('Member updated!', 'success');
+            closeModal();
+            loadMembers();
+          } catch (err) {
+            showToast(err.message, 'error');
+            confirmBtn.disabled = false; confirmBtn.innerHTML = 'Save Changes';
+          }
+        }
+      });
+    }
+
+    document.getElementById('filter-status').addEventListener('change', applyFilters);
+    document.getElementById('search-input').addEventListener('input', applyFilters);
+    document.getElementById('btn-clear').addEventListener('click', () => {
+      document.getElementById('filter-status').value = '';
+      document.getElementById('search-input').value = '';
+      applyFilters();
+    });
+
+    loadMembers();
+  </script>
+</body>
+</html>

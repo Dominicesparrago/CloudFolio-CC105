@@ -1,0 +1,203 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Staff Accounts — CloudFolio Admin</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800&family=Crimson+Pro:ital,wght@0,400;0,600;0,700;1,400&family=Courier+Prime:wght@400;700&display=swap" rel="stylesheet">
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>tailwind.config = { darkMode: 'class' }</script>
+  <link rel="stylesheet" href="/css/main.css">
+  <script src="/js/theme.js"></script>
+  <script src="/js/api.js"></script>
+  <script src="/js/toast.js"></script>
+  <script src="/js/ui.js"></script>
+  <script src="https://unpkg.com/lucide@latest/dist/umd/lucide.js"></script>
+</head>
+<body data-page-title="Staff Accounts">
+  <div id="sidebar-container"></div>
+  <div class="main-content">
+    <div id="topbar-container"></div>
+    <div class="page-body fade-in">
+      <div class="card">
+        <div class="card-header">
+          <span class="card-title">Staff Accounts</span>
+          <button id="btn-add-staff" class="btn btn-primary btn-sm" style="gap:0.375rem;">
+            <i data-lucide="user-plus" style="width:14px;height:14px;"></i>
+            Add Staff Account
+          </button>
+        </div>
+        <div id="staff-table"></div>
+      </div>
+    </div>
+  </div>
+
+  <script>window.PAGE_TITLE = 'Staff Accounts';</script>
+  <script src="/js/admin-layout.js"></script>
+  <script>
+    lucide.createIcons();
+
+    let allStaff = [];
+    let tableCtrl = null;
+
+    async function loadStaff() {
+      try {
+        allStaff = await API.get('/staff');
+        tableCtrl = renderTable('staff-table', [
+          { key: 'staff_id', label: 'Staff ID', render: v => `<span class="mono" style="font-size:0.8125rem;font-weight:600;">${v || '—'}</span>` },
+          { key: 'name', label: 'Name', render: v => `<span style="font-weight:600;">${v}</span>` },
+          { key: 'email', label: 'Email', render: v => `<span style="font-size:0.8125rem;">${v}</span>` },
+          { key: 'role', label: 'Role', render: v => statusBadge(v) },
+          { key: 'status', label: 'Status', render: v => statusBadge(v) },
+          { key: 'created_at', label: 'Created', render: v => formatDate(v) },
+          { key: 'id', label: 'Actions', sortable: false, render: (v, row) => `
+            <div style="display:flex;gap:0.375rem;flex-wrap:wrap;">
+              <button class="btn btn-ghost btn-sm action-edit" data-id="${v}" style="color:rgb(var(--info));">
+                <i data-lucide="pencil" style="width:13px;height:13px;"></i> Edit
+              </button>
+              ${row.status === 'active'
+                ? `<button class="btn btn-ghost btn-sm action-suspend" data-id="${v}" style="color:rgb(var(--accent));">Suspend</button>`
+                : row.status === 'suspended'
+                  ? `<button class="btn btn-ghost btn-sm action-activate" data-id="${v}" style="color:rgb(var(--success));">Activate</button>`
+                  : ''}
+              ${row.status !== 'inactive' ? `<button class="btn btn-ghost btn-sm action-deactivate" data-id="${v}" style="color:rgb(var(--danger));">Deactivate</button>` : ''}
+            </div>
+          `}
+        ], allStaff, { emptyMessage: 'No staff accounts found.' });
+
+        document.getElementById('staff-table').addEventListener('click', async e => {
+          const editBtn = e.target.closest('.action-edit');
+          const suspendBtn = e.target.closest('.action-suspend');
+          const activateBtn = e.target.closest('.action-activate');
+          const deactivateBtn = e.target.closest('.action-deactivate');
+
+          if (editBtn) {
+            e.stopPropagation();
+            const staff = allStaff.find(s => s.id == editBtn.dataset.id);
+            if (staff) openEditModal(staff);
+          }
+          if (suspendBtn) {
+            e.stopPropagation();
+            if (!confirm('Suspend this staff account?')) return;
+            suspendBtn.disabled = true;
+            try { await API.put('/staff/' + suspendBtn.dataset.id, { status: 'suspended' }); showToast('Account suspended.', 'success'); loadStaff(); }
+            catch (err) { showToast(err.message, 'error'); suspendBtn.disabled = false; }
+          }
+          if (activateBtn) {
+            e.stopPropagation();
+            activateBtn.disabled = true;
+            try { await API.put('/staff/' + activateBtn.dataset.id, { status: 'active' }); showToast('Account activated!', 'success'); loadStaff(); }
+            catch (err) { showToast(err.message, 'error'); activateBtn.disabled = false; }
+          }
+          if (deactivateBtn) {
+            e.stopPropagation();
+            const staffMember = allStaff.find(s => s.id == deactivateBtn.dataset.id);
+            const staffName = staffMember ? staffMember.name : 'this staff account';
+            const targetId = deactivateBtn.dataset.id;
+            openModal('Confirm Deactivation', `
+              <p style="color:rgb(var(--text-secondary));font-size:0.9375rem;">
+                Are you sure you want to deactivate <strong style="color:rgb(var(--text-primary));">${staffName}</strong>?
+              </p>
+              <p style="margin-top:0.625rem;font-size:0.8125rem;color:rgb(var(--text-muted));">This account will be marked inactive and the staff member will lose access.</p>
+            `, {
+              confirmText: 'Deactivate',
+              confirmClass: 'btn-danger',
+              onConfirm: async () => {
+                const btn = document.getElementById('modal-confirm-btn');
+                btn.disabled = true; btn.innerHTML = '<span class="spinner"></span> Deactivating...';
+                try {
+                  await API.delete('/staff/' + targetId);
+                  showToast('Account deactivated.', 'success');
+                  closeModal();
+                  loadStaff();
+                } catch (err) {
+                  showToast(err.message, 'error');
+                  btn.disabled = false; btn.innerHTML = 'Deactivate';
+                }
+              }
+            });
+          }
+        });
+
+        lucide.createIcons();
+      } catch (err) { showToast('Failed to load staff accounts.', 'error'); }
+    }
+
+    function openEditModal(staff) {
+      openModal('Edit Staff Account', `
+        <div class="alert alert-info" style="margin-bottom:1rem;font-size:0.8125rem;">
+          Staff ID: <strong class="mono">${staff.staff_id}</strong>
+        </div>
+        <div class="form-group"><label class="form-label">Full Name</label>
+          <input type="text" id="edit-name" class="form-control" value="${staff.name}"></div>
+        <div class="form-group"><label class="form-label">Email</label>
+          <input type="email" id="edit-email" class="form-control" value="${staff.email}"></div>
+        <div class="form-group"><label class="form-label">Role</label>
+          <select id="edit-role" class="form-control">
+            <option value="staff" ${staff.role==='staff'?'selected':''}>Staff</option>
+            <option value="admin" ${staff.role==='admin'?'selected':''}>Admin</option>
+          </select></div>
+        <div class="form-group"><label class="form-label">Status</label>
+          <select id="edit-status" class="form-control">
+            <option value="active" ${staff.status==='active'?'selected':''}>Active</option>
+            <option value="suspended" ${staff.status==='suspended'?'selected':''}>Suspended</option>
+          </select></div>
+      `, {
+        confirmText: 'Save Changes',
+        onConfirm: async () => {
+          const name = document.getElementById('edit-name').value.trim();
+          const email = document.getElementById('edit-email').value.trim();
+          const role = document.getElementById('edit-role').value;
+          const status = document.getElementById('edit-status').value;
+          if (!name || !email) { showToast('Name and email are required.', 'error'); return; }
+          const btn = document.getElementById('modal-confirm-btn');
+          btn.disabled = true; btn.innerHTML = '<span class="spinner"></span> Saving...';
+          try { await API.put('/staff/' + staff.id, { name, email, role, status }); showToast('Staff account updated!', 'success'); closeModal(); loadStaff(); }
+          catch (err) { showToast(err.message, 'error'); btn.disabled = false; btn.innerHTML = 'Save Changes'; }
+        }
+      });
+    }
+
+    function openAddStaffModal() {
+      openModal('Add Staff Account', `
+        <div class="form-group"><label class="form-label">Full Name *</label>
+          <input type="text" id="add-name" class="form-control" placeholder="Full name" required>
+          <div class="form-error" id="add-name-error"></div></div>
+        <div class="form-group"><label class="form-label">Email *</label>
+          <input type="email" id="add-email" class="form-control" placeholder="Email address" required>
+          <div class="form-error" id="add-email-error"></div></div>
+        <div class="form-group"><label class="form-label">Role</label>
+          <select id="add-role" class="form-control">
+            <option value="staff">Staff</option>
+            <option value="admin">Admin</option>
+          </select></div>
+        <div class="form-group"><label class="form-label">Password *</label>
+          <input type="password" id="add-password" class="form-control" placeholder="At least 6 characters" required>
+          <div class="form-error" id="add-password-error"></div></div>
+        <p style="font-size:0.75rem;color:rgb(var(--text-muted));margin-top:0.25rem;">Staff ID will be auto-generated.</p>
+      `, {
+        confirmText: 'Create Staff Account',
+        onConfirm: async () => {
+          const name = document.getElementById('add-name').value.trim();
+          const email = document.getElementById('add-email').value.trim();
+          const role = document.getElementById('add-role').value;
+          const password = document.getElementById('add-password').value;
+          let valid = true;
+          if (!name) { document.getElementById('add-name-error').textContent = 'Name required.'; valid = false; }
+          if (!email) { document.getElementById('add-email-error').textContent = 'Email required.'; valid = false; }
+          if (!password || password.length < 6) { document.getElementById('add-password-error').textContent = 'Password must be at least 6 characters.'; valid = false; }
+          if (!valid) return;
+          const btn = document.getElementById('modal-confirm-btn');
+          btn.disabled = true; btn.innerHTML = '<span class="spinner"></span> Creating...';
+          try { const result = await API.post('/staff', { name, email, role, password }); showToast(`Staff account created! ID: ${result.staff_id}`, 'success'); closeModal(); loadStaff(); }
+          catch (err) { showToast(err.message, 'error'); btn.disabled = false; btn.innerHTML = 'Create Staff Account'; }
+        }
+      });
+    }
+
+    document.getElementById('btn-add-staff').addEventListener('click', openAddStaffModal);
+    loadStaff();
+  </script>
+</body>
+</html>

@@ -1,0 +1,160 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Fines — CloudFolio Staff</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800&family=Crimson+Pro:ital,wght@0,400;0,600;0,700;1,400&family=Courier+Prime:wght@400;700&display=swap" rel="stylesheet">
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>tailwind.config = { darkMode: 'class' }</script>
+  <link rel="stylesheet" href="/css/main.css">
+  <script src="/js/theme.js"></script>
+  <script src="/js/api.js"></script>
+  <script src="/js/toast.js"></script>
+  <script src="/js/ui.js"></script>
+  <script src="https://unpkg.com/lucide@latest/dist/umd/lucide.js"></script>
+</head>
+<body data-page-title="Fines & Payments">
+  <div id="sidebar-container"></div>
+  <div class="main-content">
+    <div id="topbar-container"></div>
+    <div class="page-body fade-in">
+      <!-- Summary Cards -->
+      <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:1rem;margin-bottom:1.25rem;">
+        <div class="stat-card">
+          <div class="stat-icon" style="background:rgba(var(--danger)/0.12);">
+            <i data-lucide="alert-triangle" style="width:20px;height:20px;color:rgb(var(--danger));"></i>
+          </div>
+          <div>
+            <div class="stat-label">Total Pending</div>
+            <div class="stat-value" id="stat-pending">—</div>
+          </div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-icon" style="background:rgba(var(--success)/0.12);">
+            <i data-lucide="check-circle" style="width:20px;height:20px;color:rgb(var(--success));"></i>
+          </div>
+          <div>
+            <div class="stat-label">Total Collected</div>
+            <div class="stat-value" id="stat-collected">—</div>
+          </div>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="card-header">
+          <span class="card-title">Fines & Payments</span>
+        </div>
+        <div class="filter-bar">
+          <select id="filter-status" class="form-control" style="max-width:160px;">
+            <option value="">All Statuses</option>
+            <option value="pending">Pending</option>
+            <option value="paid">Paid</option>
+            <option value="waived">Waived</option>
+          </select>
+          <input type="text" id="search-input" class="form-control" placeholder="Search member..." style="max-width:260px;">
+          <button id="btn-clear" class="btn btn-ghost btn-sm">Clear</button>
+        </div>
+        <div id="fines-table"></div>
+      </div>
+    </div>
+  </div>
+
+  <script>window.PAGE_TITLE = 'Fines & Payments';</script>
+  <script src="/js/staff-layout.js"></script>
+  <script>
+    lucide.createIcons();
+
+    let allFines = [];
+    let tableCtrl = null;
+
+    function applyFilters() {
+      const status = document.getElementById('filter-status').value;
+      const search = document.getElementById('search-input').value.toLowerCase();
+      const filtered = allFines.filter(f => {
+        const matchStatus = !status || f.status === status;
+        const matchSearch = !search || (f.member_name && f.member_name.toLowerCase().includes(search));
+        return matchStatus && matchSearch;
+      });
+      if (tableCtrl) tableCtrl.update(filtered);
+    }
+
+    async function loadFines() {
+      try {
+        allFines = await API.get('/fines');
+
+        const pending = allFines.filter(f => f.status === 'pending').reduce((s, f) => s + f.amount, 0);
+        const collected = allFines.filter(f => f.status === 'paid').reduce((s, f) => s + f.amount, 0);
+        document.getElementById('stat-pending').textContent = formatCurrency(pending);
+        document.getElementById('stat-collected').textContent = formatCurrency(collected);
+
+        tableCtrl = renderTable('fines-table', [
+          { key: 'member_name', label: 'Member', render: v => `<span style="font-weight:600;">${v}</span>` },
+          { key: 'item_title', label: 'Item', render: v => v || '—' },
+          { key: 'reason', label: 'Reason', render: v => `<span style="font-size:0.8125rem;color:rgb(var(--text-secondary));">${v || '—'}</span>` },
+          { key: 'amount', label: 'Amount (₱)', render: v => `<span style="font-weight:600;font-family:'Courier Prime',monospace;">${formatCurrency(v)}</span>` },
+          { key: 'status', label: 'Status', render: v => statusBadge(v) },
+          { key: 'created_at', label: 'Date', render: v => formatDate(v) },
+          { key: 'id', label: 'Actions', sortable: false, render: (v, row) => {
+            if (row.status !== 'pending') return '<span style="color:rgb(var(--text-subtle));font-size:0.8125rem;">—</span>';
+            return `
+              <div style="display:flex;gap:0.375rem;">
+                <button class="btn btn-sm btn-success action-paid" data-id="${v}">Mark Paid</button>
+                <button class="btn btn-sm btn-ghost action-waive" data-id="${v}" style="color:rgb(var(--text-muted));">Waive</button>
+              </div>
+            `;
+          }}
+        ], allFines, { emptyMessage: 'No fines found.' });
+
+        document.getElementById('fines-table').addEventListener('click', async e => {
+          const paidBtn = e.target.closest('.action-paid');
+          const waiveBtn = e.target.closest('.action-waive');
+
+          if (paidBtn) {
+            e.stopPropagation();
+            if (!confirm('Mark this fine as paid?')) return;
+            paidBtn.disabled = true; paidBtn.textContent = '...';
+            try {
+              await API.put('/fines/' + paidBtn.dataset.id, { status: 'paid' });
+              showToast('Fine marked as paid!', 'success');
+              await loadFines(); applyFilters();
+            } catch (err) {
+              showToast(err.message, 'error');
+              paidBtn.disabled = false; paidBtn.textContent = 'Mark Paid';
+            }
+          }
+
+          if (waiveBtn) {
+            e.stopPropagation();
+            if (!confirm('Waive this fine?')) return;
+            waiveBtn.disabled = true;
+            try {
+              await API.put('/fines/' + waiveBtn.dataset.id, { status: 'waived' });
+              showToast('Fine waived.', 'success');
+              await loadFines(); applyFilters();
+            } catch (err) {
+              showToast(err.message, 'error');
+              waiveBtn.disabled = false;
+            }
+          }
+        });
+
+        lucide.createIcons();
+      } catch (err) {
+        showToast('Failed to load fines.', 'error');
+      }
+    }
+
+    document.getElementById('filter-status').addEventListener('change', applyFilters);
+    document.getElementById('search-input').addEventListener('input', applyFilters);
+    document.getElementById('btn-clear').addEventListener('click', () => {
+      document.getElementById('filter-status').value = '';
+      document.getElementById('search-input').value = '';
+      applyFilters();
+    });
+
+    loadFines();
+  </script>
+</body>
+</html>

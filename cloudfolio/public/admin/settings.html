@@ -1,0 +1,165 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>System Settings — CloudFolio Admin</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800&family=Crimson+Pro:ital,wght@0,400;0,600;0,700;1,400&family=Courier+Prime:wght@400;700&display=swap" rel="stylesheet">
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>tailwind.config = { darkMode: 'class' }</script>
+  <link rel="stylesheet" href="/css/main.css">
+  <script src="/js/theme.js"></script>
+  <script src="/js/api.js"></script>
+  <script src="/js/toast.js"></script>
+  <script src="/js/ui.js"></script>
+  <script src="https://unpkg.com/lucide@latest/dist/umd/lucide.js"></script>
+</head>
+<body data-page-title="System Settings">
+  <div id="sidebar-container"></div>
+  <div class="main-content">
+    <div id="topbar-container"></div>
+    <div class="page-body fade-in">
+
+      <div id="loading-state" style="display:flex;align-items:center;justify-content:center;padding:3rem;gap:1rem;">
+        <div class="spinner spinner-dark"></div>
+        <span style="color:rgb(var(--text-muted));">Loading settings...</span>
+      </div>
+
+      <div id="settings-content" style="display:none;">
+
+        <!-- Card 1: Fine Rules -->
+        <div class="card" style="margin-bottom:1.25rem;">
+          <div class="card-header">
+            <div style="display:flex;align-items:center;gap:0.5rem;">
+              <i data-lucide="settings" style="width:15px;height:15px;color:rgb(var(--text-muted));"></i>
+              <span class="card-title">Fine Rules</span>
+            </div>
+          </div>
+          <div class="card-body">
+            <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:1rem;margin-bottom:1.25rem;" class="fine-grid">
+              <div class="form-group" style="margin-bottom:0;">
+                <label class="form-label">Daily Fine Rate (₱)</label>
+                <input type="number" id="fine_per_day" class="form-control" min="0" step="0.01" placeholder="10.00">
+                <div style="font-size:0.75rem;color:rgb(var(--text-muted));margin-top:0.25rem;">Charged per day overdue</div>
+              </div>
+              <div class="form-group" style="margin-bottom:0;">
+                <label class="form-label">Fine Cap (₱)</label>
+                <input type="number" id="fine_cap" class="form-control" min="0" step="0.01" placeholder="200.00">
+                <div style="font-size:0.75rem;color:rgb(var(--text-muted));margin-top:0.25rem;">Maximum fine per item</div>
+              </div>
+              <div class="form-group" style="margin-bottom:0;">
+                <label class="form-label">Loan Period (days)</label>
+                <input type="number" id="loan_period_days" class="form-control" min="1" max="365" placeholder="14">
+                <div style="font-size:0.75rem;color:rgb(var(--text-muted));margin-top:0.25rem;">Default borrow duration</div>
+              </div>
+            </div>
+            <div style="display:flex;justify-content:flex-end;">
+              <button id="btn-save-fines" class="btn btn-primary" style="gap:0.375rem;">
+                <i data-lucide="save" style="width:14px;height:14px;"></i>
+                Save Fine Rules
+              </button>
+            </div>
+          </div>
+        </div>
+
+        <!-- Card 2: Library Information -->
+        <div class="card">
+          <div class="card-header">
+            <div style="display:flex;align-items:center;gap:0.5rem;">
+              <i data-lucide="book-open" style="width:15px;height:15px;color:rgb(var(--text-muted));"></i>
+              <span class="card-title">Library Information</span>
+            </div>
+          </div>
+          <div class="card-body">
+            <div style="display:grid;grid-template-columns:1fr 1fr;gap:1rem;margin-bottom:1rem;" class="info-grid">
+              <div class="form-group" style="margin-bottom:0;">
+                <label class="form-label">Library Name</label>
+                <input type="text" id="library_name" class="form-control" placeholder="Library name">
+              </div>
+              <div class="form-group" style="margin-bottom:0;">
+                <label class="form-label">Contact Email</label>
+                <input type="email" id="library_email" class="form-control" placeholder="library@example.com">
+              </div>
+            </div>
+            <div class="form-group" style="margin-bottom:1.25rem;">
+              <label class="form-label">Address</label>
+              <textarea id="library_address" class="form-control" rows="2" style="resize:vertical;" placeholder="Full address"></textarea>
+            </div>
+            <div style="display:flex;justify-content:flex-end;">
+              <button id="btn-save-library" class="btn btn-primary" style="gap:0.375rem;">
+                <i data-lucide="save" style="width:14px;height:14px;"></i>
+                Save Library Info
+              </button>
+            </div>
+          </div>
+        </div>
+
+      </div>
+    </div>
+  </div>
+
+  <script>window.PAGE_TITLE = 'System Settings';</script>
+  <script src="/js/admin-layout.js"></script>
+  <script>
+    lucide.createIcons();
+
+    let allSettings = {};
+
+    async function loadSettings() {
+      try {
+        const { settings } = await API.get('/settings');
+        allSettings = { ...settings };
+
+        ['fine_per_day', 'fine_cap', 'loan_period_days', 'library_name', 'library_email', 'library_address'].forEach(key => {
+          const el = document.getElementById(key);
+          if (el && settings[key] !== undefined) el.value = settings[key];
+        });
+
+        document.getElementById('loading-state').style.display = 'none';
+        document.getElementById('settings-content').style.display = 'block';
+        lucide.createIcons();
+      } catch (err) {
+        document.getElementById('loading-state').innerHTML = `<div class="alert alert-danger">Failed to load settings: ${err.message}</div>`;
+      }
+    }
+
+    async function saveKeys(keys, btn, label) {
+      const updates = {};
+      keys.forEach(k => {
+        const el = document.getElementById(k);
+        if (el) updates[k] = el.value;
+      });
+
+      btn.disabled = true;
+      btn.innerHTML = '<span class="spinner"></span> Saving...';
+      try {
+        await API.put('/settings', updates);
+        Object.assign(allSettings, updates);
+        showToast('Settings saved!', 'success');
+      } catch (err) {
+        showToast('Failed to save: ' + err.message, 'error');
+      }
+      btn.disabled = false;
+      btn.innerHTML = `<i data-lucide="save" style="width:14px;height:14px;"></i> ${label}`;
+      lucide.createIcons({ nodes: [btn] });
+    }
+
+    document.getElementById('btn-save-fines').addEventListener('click', function() {
+      saveKeys(['fine_per_day', 'fine_cap', 'loan_period_days'], this, 'Save Fine Rules');
+    });
+
+    document.getElementById('btn-save-library').addEventListener('click', function() {
+      saveKeys(['library_name', 'library_email', 'library_address'], this, 'Save Library Info');
+    });
+
+    loadSettings();
+  </script>
+  <style>
+    @media (max-width: 700px) {
+      .fine-grid { grid-template-columns: 1fr !important; }
+      .info-grid { grid-template-columns: 1fr !important; }
+    }
+  </style>
+</body>
+</html>

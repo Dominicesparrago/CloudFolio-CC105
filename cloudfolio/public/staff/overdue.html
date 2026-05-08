@@ -1,0 +1,294 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Overdue Queue — CloudFolio Staff</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800&family=Crimson+Pro:ital,wght@0,400;0,600;0,700;1,400&family=Courier+Prime:wght@400;700&display=swap" rel="stylesheet">
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>tailwind.config = { darkMode: 'class' }</script>
+  <link rel="stylesheet" href="/css/main.css">
+  <script src="/js/theme.js"></script>
+  <script src="/js/api.js"></script>
+  <script src="/js/toast.js"></script>
+  <script src="/js/ui.js"></script>
+  <script src="https://unpkg.com/lucide@latest/dist/umd/lucide.js"></script>
+</head>
+<body data-page-title="Overdue Queue">
+  <div id="sidebar-container"></div>
+  <div class="main-content">
+    <div id="topbar-container"></div>
+    <div class="page-body fade-in">
+
+      <!-- Stat Cards -->
+      <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:1rem;margin-bottom:1.25rem;">
+        <div class="stat-card">
+          <div class="stat-icon" style="background:rgba(var(--danger)/0.12);">
+            <i data-lucide="alert-circle" style="width:20px;height:20px;color:rgb(var(--danger));"></i>
+          </div>
+          <div>
+            <div class="stat-label">Total Overdue</div>
+            <div class="stat-value" id="stat-total">—</div>
+          </div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-icon" style="background:rgba(var(--accent)/0.12);">
+            <i data-lucide="banknote" style="width:20px;height:20px;color:rgb(var(--accent));"></i>
+          </div>
+          <div>
+            <div class="stat-label">Total Accrued Fines</div>
+            <div class="stat-value" id="stat-accrued">—</div>
+          </div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-icon" style="background:rgba(var(--danger)/0.12);">
+            <i data-lucide="clock-x" style="width:20px;height:20px;color:rgb(var(--danger));"></i>
+          </div>
+          <div>
+            <div class="stat-label">Overdue 30+ Days</div>
+            <div class="stat-value" id="stat-severe">—</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Filter + Actions row -->
+      <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:0.75rem;margin-bottom:1rem;">
+        <!-- Pill filters -->
+        <div style="display:flex;gap:0.5rem;flex-wrap:wrap;" id="filter-pills">
+          <button class="pill-btn pill-active" data-days="0">All</button>
+          <button class="pill-btn" data-days="7">7+ days</button>
+          <button class="pill-btn" data-days="14">14+ days</button>
+          <button class="pill-btn" data-days="30">30+ days</button>
+        </div>
+        <!-- Bulk actions -->
+        <div style="display:flex;gap:0.5rem;">
+          <button id="btn-bulk-hold" class="btn btn-secondary btn-sm" style="gap:0.375rem;" disabled>
+            <i data-lucide="user-x" style="width:14px;height:14px;"></i>
+            Apply Hold
+          </button>
+          <button id="btn-bulk-notify" class="btn btn-primary btn-sm" style="gap:0.375rem;" disabled>
+            <i data-lucide="bell" style="width:14px;height:14px;"></i>
+            Send Overdue Notices
+          </button>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="card-header">
+          <div style="display:flex;align-items:center;gap:0.5rem;">
+            <i data-lucide="alert-circle" style="width:16px;height:16px;color:rgb(var(--danger));"></i>
+            <span class="card-title">Overdue Queue</span>
+            <span id="overdue-count" class="badge badge-overdue" style="margin-left:0.25rem;"></span>
+          </div>
+        </div>
+        <div id="overdue-table"></div>
+      </div>
+    </div>
+  </div>
+
+  <style>
+    .pill-btn {
+      padding: 0.375rem 0.875rem;
+      border-radius: 9999px;
+      border: none;
+      font-size: 0.8125rem;
+      font-weight: 500;
+      cursor: pointer;
+      background: rgb(var(--surface-2));
+      color: rgb(var(--text-muted));
+      transition: background 0.15s, color 0.15s;
+    }
+    .pill-btn:hover { background: rgba(var(--danger)/0.15); color: rgb(var(--danger)); }
+    .pill-btn.pill-active { background: rgb(var(--danger)); color: #fff; }
+  </style>
+
+  <script>window.PAGE_TITLE = 'Overdue Queue';</script>
+  <script src="/js/staff-layout.js"></script>
+  <script>
+    lucide.createIcons();
+
+    let allOverdue = [];
+    let tableCtrl = null;
+    let activeFilter = 0;
+    let fineRate = 10.00;
+    let fineCap = 200.00;
+
+    async function loadOverdue() {
+      try {
+        const [overdueData, settings] = await Promise.all([
+          API.get('/loans/overdue'),
+          API.get('/settings')
+        ]);
+
+        allOverdue = overdueData;
+
+        if (settings && settings.settings) {
+          fineRate = parseFloat(settings.settings.fine_per_day) || 10.00;
+          fineCap = parseFloat(settings.settings.fine_cap) || 200.00;
+        }
+
+        updateStats();
+        renderFiltered();
+
+      } catch (err) {
+        showToast('Failed to load overdue loans.', 'error');
+      }
+    }
+
+    function updateStats() {
+      const totalAccrued = allOverdue.reduce((s, l) => s + getAccruedFine(l.due_date, fineRate, fineCap), 0);
+      const severe = allOverdue.filter(l => getOverdueDays(l.due_date) >= 30).length;
+      document.getElementById('stat-total').textContent = allOverdue.length;
+      document.getElementById('stat-accrued').textContent = formatCurrency(totalAccrued);
+      document.getElementById('stat-severe').textContent = severe;
+    }
+
+    function renderFiltered() {
+      const filtered = activeFilter === 0
+        ? allOverdue
+        : allOverdue.filter(l => getOverdueDays(l.due_date) >= activeFilter);
+
+      document.getElementById('overdue-count').textContent = filtered.length;
+
+      tableCtrl = renderTable('overdue-table', [
+        { key: 'member_name', label: 'Member', render: v => `<span style="font-weight:600;">${v}</span>` },
+        { key: 'item_title', label: 'Item', render: (v, row) => `<div style="max-width:200px;"><div style="font-weight:500;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${v}</div><div style="font-size:0.75rem;color:rgb(var(--text-muted));">${row.item_author || ''}</div></div>` },
+        { key: 'due_date', label: 'Due Date', render: v => `<span style="color:rgb(var(--danger));">${formatDate(v)}</span>` },
+        { key: 'due_date', label: 'Days Overdue', render: v => {
+          const d = getOverdueDays(v);
+          return `<span style="color:rgb(var(--danger));font-weight:700;">${d} day${d !== 1 ? 's' : ''}</span>`;
+        }},
+        { key: 'due_date', label: 'Fine Accrued', sortable: false, render: v => {
+          const fine = getAccruedFine(v, fineRate, fineCap);
+          const days = getOverdueDays(v);
+          const isCapped = days * fineRate >= fineCap;
+          return `<span style="font-weight:600;color:rgb(var(--accent));">${formatCurrency(fine)}</span>${isCapped ? ' <span style="font-size:0.7rem;background:rgba(var(--accent)/0.15);color:rgb(var(--accent));padding:1px 5px;border-radius:4px;font-weight:600;">Cap</span>' : ''}`;
+        }},
+        { key: 'status', label: 'Status', render: v => statusBadge(v) },
+        { key: 'id', label: 'Actions', sortable: false, render: (v, row) => `
+          <div style="display:flex;gap:0.375rem;flex-wrap:wrap;">
+            <button class="btn btn-sm btn-ghost action-hold" data-id="${v}" style="color:rgb(var(--accent));">
+              <i data-lucide="user-x" style="width:12px;height:12px;"></i> Hold
+            </button>
+            <button class="btn btn-sm btn-ghost action-notify" data-id="${v}" data-member-id="${row.member_id}" data-title="${row.item_title.replace(/"/g, '&quot;')}" style="color:rgb(var(--info));">
+              <i data-lucide="bell" style="width:12px;height:12px;"></i> Notice
+            </button>
+            <button class="btn btn-sm btn-success action-return" data-id="${v}">Return</button>
+          </div>
+        `}
+      ], filtered, {
+        selectable: true,
+        emptyMessage: activeFilter === 0 ? 'No overdue loans. Everything is on time!' : `No loans overdue by ${activeFilter}+ days.`
+      });
+
+      lucide.createIcons();
+
+      document.getElementById('overdue-table').addEventListener('click', async e => {
+        const holdBtn = e.target.closest('.action-hold');
+        const notifyBtn = e.target.closest('.action-notify');
+        const returnBtn = e.target.closest('.action-return');
+
+        if (holdBtn) {
+          e.stopPropagation();
+          showToast('Hold applied', 'success');
+        }
+        if (notifyBtn) {
+          e.stopPropagation();
+          await sendNotice(notifyBtn.dataset.memberId, notifyBtn.dataset.title, notifyBtn);
+        }
+        if (returnBtn) {
+          e.stopPropagation();
+          if (!confirm('Confirm return?')) return;
+          returnBtn.disabled = true;
+          try {
+            await API.put('/loans/' + returnBtn.dataset.id, { action: 'return' });
+            showToast('Book returned!', 'success');
+            loadOverdue();
+          } catch (err) {
+            showToast(err.message, 'error');
+            returnBtn.disabled = false;
+          }
+        }
+
+        updateBulkBtns();
+      });
+
+      document.getElementById('overdue-table').addEventListener('change', updateBulkBtns);
+    }
+
+    function updateBulkBtns() {
+      const selected = tableCtrl ? tableCtrl.getSelected() : [];
+      const notifyBtn = document.getElementById('btn-bulk-notify');
+      const holdBtn = document.getElementById('btn-bulk-hold');
+      notifyBtn.disabled = selected.length === 0;
+      holdBtn.disabled = selected.length === 0;
+      notifyBtn.innerHTML = selected.length > 0
+        ? `<i data-lucide="bell" style="width:14px;height:14px;"></i> Send Notices (${selected.length})`
+        : '<i data-lucide="bell" style="width:14px;height:14px;"></i> Send Overdue Notices';
+      holdBtn.innerHTML = selected.length > 0
+        ? `<i data-lucide="user-x" style="width:14px;height:14px;"></i> Apply Hold (${selected.length})`
+        : '<i data-lucide="user-x" style="width:14px;height:14px;"></i> Apply Hold';
+      lucide.createIcons({ nodes: [notifyBtn, holdBtn] });
+    }
+
+    async function sendNotice(memberId, title, btn) {
+      if (btn) btn.disabled = true;
+      try {
+        await API.post('/notifications', {
+          member_id: parseInt(memberId),
+          title: 'Overdue Notice',
+          message: `Your loan of "${title}" is overdue. Please return it immediately to avoid additional fines.`,
+          type: 'overdue'
+        });
+        showToast('Overdue notice created!', 'success');
+      } catch (err) {
+        showToast(err.message, 'error');
+      }
+      if (btn) btn.disabled = false;
+    }
+
+    // Pill filter buttons
+    document.getElementById('filter-pills').addEventListener('click', e => {
+      const btn = e.target.closest('.pill-btn');
+      if (!btn) return;
+      document.querySelectorAll('.pill-btn').forEach(b => b.classList.remove('pill-active'));
+      btn.classList.add('pill-active');
+      activeFilter = parseInt(btn.dataset.days);
+      renderFiltered();
+    });
+
+    // Bulk notify
+    document.getElementById('btn-bulk-notify').addEventListener('click', async () => {
+      const selected = tableCtrl ? tableCtrl.getSelected() : [];
+      if (!selected.length) return;
+      const btn = document.getElementById('btn-bulk-notify');
+      btn.disabled = true;
+      btn.innerHTML = '<span class="spinner"></span> Sending...';
+      let sent = 0;
+      for (const loan of selected) {
+        try {
+          await API.post('/notifications', {
+            member_id: loan.member_id,
+            title: 'Overdue Notice',
+            message: `Your loan of "${loan.item_title}" is overdue. Please return it immediately.`,
+            type: 'overdue'
+          });
+          sent++;
+        } catch (_) {}
+      }
+      showToast(`${sent} overdue notice${sent !== 1 ? 's' : ''} sent!`, 'success');
+      updateBulkBtns();
+    });
+
+    // Bulk hold
+    document.getElementById('btn-bulk-hold').addEventListener('click', () => {
+      const selected = tableCtrl ? tableCtrl.getSelected() : [];
+      if (!selected.length) return;
+      showToast(`Hold applied to ${selected.length} item${selected.length !== 1 ? 's' : ''}`, 'success');
+    });
+
+    loadOverdue();
+  </script>
+</body>
+</html>

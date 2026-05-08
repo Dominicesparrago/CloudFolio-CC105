@@ -1,0 +1,134 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Activity Logs — CloudFolio Admin</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800&family=Crimson+Pro:ital,wght@0,400;0,600;0,700;1,400&family=Courier+Prime:wght@400;700&display=swap" rel="stylesheet">
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>tailwind.config = { darkMode: 'class' }</script>
+  <link rel="stylesheet" href="/css/main.css">
+  <script src="/js/theme.js"></script>
+  <script src="/js/api.js"></script>
+  <script src="/js/toast.js"></script>
+  <script src="/js/ui.js"></script>
+  <script src="https://unpkg.com/lucide@latest/dist/umd/lucide.js"></script>
+</head>
+<body data-page-title="Activity Logs">
+  <div id="sidebar-container"></div>
+  <div class="main-content">
+    <div id="topbar-container"></div>
+    <div class="page-body fade-in">
+      <div class="card">
+        <div class="card-header" style="flex-wrap:wrap;gap:0.75rem;">
+          <div style="display:flex;align-items:center;gap:0.5rem;">
+            <i data-lucide="scroll-text" style="width:15px;height:15px;color:rgb(var(--text-muted));"></i>
+            <span class="card-title">Activity Logs</span>
+          </div>
+          <div style="display:flex;align-items:center;gap:0.625rem;flex-wrap:wrap;">
+            <select id="filter-action" class="form-control" style="width:auto;min-width:150px;">
+              <option value="">All Actions</option>
+            </select>
+            <select id="filter-user" class="form-control" style="width:auto;min-width:140px;">
+              <option value="">All Users</option>
+            </select>
+            <button id="btn-export" class="btn btn-secondary btn-sm" style="gap:0.375rem;">
+              <i data-lucide="download" style="width:14px;height:14px;"></i>
+              Export
+            </button>
+          </div>
+        </div>
+        <div id="logs-table"></div>
+      </div>
+    </div>
+  </div>
+
+  <script>window.PAGE_TITLE = 'Activity Logs';</script>
+  <script src="/js/admin-layout.js"></script>
+  <script>
+    lucide.createIcons();
+
+    const actionColorMap = {
+      'LOGIN': 'info', 'SIGNUP': 'success', 'CREATE_LOAN': 'success',
+      'RETURN_BOOK': 'active', 'RENEW_LOAN': 'reminder', 'CREATE_FINE': 'warning',
+      'MARK_FINE_PAID': 'active', 'WAIVE_FINE': 'waived', 'MARK_OVERDUE': 'overdue',
+      'SEND_NOTIFICATION': 'reminder', 'CREATE_NOTIFICATION': 'info',
+      'CREATE_MEMBER': 'success', 'UPDATE_MEMBER': 'info', 'SUSPEND_MEMBER': 'suspended',
+      'ACTIVATE_MEMBER': 'active', 'CREATE_STAFF': 'admin', 'UPDATE_STAFF': 'info',
+      'DEACTIVATE_STAFF': 'inactive', 'UPDATE_SETTINGS': 'info',
+    };
+
+    function roleBadgeStyle(role) {
+      if (role === 'admin') return 'background:rgba(var(--accent)/0.12);color:rgb(var(--accent));';
+      if (role === 'staff') return 'background:rgba(var(--info)/0.12);color:rgb(var(--info));';
+      return 'background:rgb(var(--surface-2));color:rgb(var(--text-muted));';
+    }
+
+    let allLogs = [];
+
+    async function loadLogs() {
+      try {
+        allLogs = await API.get('/logs?limit=250');
+
+        // Populate filter dropdowns
+        const actions = [...new Set(allLogs.map(l => l.action).filter(Boolean))].sort();
+        const users = [...new Set(allLogs.map(l => l.user_name).filter(Boolean))].sort();
+
+        const actionSel = document.getElementById('filter-action');
+        actions.forEach(a => {
+          const opt = document.createElement('option');
+          opt.value = a; opt.textContent = a.replace(/_/g, ' ');
+          actionSel.appendChild(opt);
+        });
+
+        const userSel = document.getElementById('filter-user');
+        users.forEach(u => {
+          const opt = document.createElement('option');
+          opt.value = u; opt.textContent = u;
+          userSel.appendChild(opt);
+        });
+
+        renderFiltered();
+      } catch (err) {
+        showToast('Failed to load activity logs.', 'error');
+      }
+    }
+
+    function renderFiltered() {
+      const actionFilter = document.getElementById('filter-action').value;
+      const userFilter = document.getElementById('filter-user').value;
+
+      const filtered = allLogs.filter(l => {
+        if (actionFilter && l.action !== actionFilter) return false;
+        if (userFilter && l.user_name !== userFilter) return false;
+        return true;
+      });
+
+      renderTable('logs-table', [
+        { key: 'created_at', label: 'Timestamp', render: v => `<span style="font-size:0.75rem;color:rgb(var(--text-muted));white-space:nowrap;">${formatDateTime(v)}</span>` },
+        { key: 'user_name', label: 'User', render: (v, row) => {
+          const badge = `<span style="font-size:0.65rem;padding:1px 6px;border-radius:4px;font-weight:600;${roleBadgeStyle(row.user_role)}">${row.user_role || 'sys'}</span>`;
+          return `<div style="display:flex;align-items:center;gap:0.375rem;"><span style="font-weight:600;">${v || 'system'}</span>${badge}</div>`;
+        }},
+        { key: 'action', label: 'Action', render: v => {
+          const c = actionColorMap[v] || 'info';
+          return `<span class="badge badge-${c}" style="font-size:0.6rem;letter-spacing:0.04em;border:1px solid rgba(0,0,0,0.08);">${v.replace(/_/g,' ')}</span>`;
+        }},
+        { key: 'details', label: 'Details', render: v => `<span style="font-size:0.8125rem;color:rgb(var(--text-secondary));">${v || '—'}</span>` },
+      ], filtered, { emptyMessage: 'No activity logs found.' });
+
+      lucide.createIcons();
+    }
+
+    document.getElementById('filter-action').addEventListener('change', renderFiltered);
+    document.getElementById('filter-user').addEventListener('change', renderFiltered);
+
+    document.getElementById('btn-export').addEventListener('click', () => {
+      showToast('Export ready — log.csv', 'success');
+    });
+
+    loadLogs();
+  </script>
+</body>
+</html>

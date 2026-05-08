@@ -1,0 +1,172 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Dashboard — CloudFolio Staff</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800&family=Crimson+Pro:ital,wght@0,400;0,600;0,700;1,400&family=Courier+Prime:wght@400;700&display=swap" rel="stylesheet">
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>tailwind.config = { darkMode: 'class' }</script>
+  <link rel="stylesheet" href="/css/main.css">
+  <script src="/js/theme.js"></script>
+  <script src="/js/api.js"></script>
+  <script src="/js/toast.js"></script>
+  <script src="/js/ui.js"></script>
+  <script src="https://unpkg.com/lucide@latest/dist/umd/lucide.js"></script>
+</head>
+<body data-page-title="Dashboard">
+  <div id="sidebar-container"></div>
+  <div class="main-content">
+    <div id="topbar-container"></div>
+    <div class="page-body fade-in">
+
+      <!-- Stat Cards -->
+      <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:1rem;margin-bottom:1.5rem;">
+        <div class="stat-card">
+          <div class="stat-icon" style="background:rgba(var(--info)/0.12);">
+            <i data-lucide="book-open" style="width:22px;height:22px;color:rgb(var(--info));"></i>
+          </div>
+          <div>
+            <div class="stat-label">Active Loans</div>
+            <div class="stat-value" id="stat-active">—</div>
+            <div class="stat-sub">Active + Due Today</div>
+          </div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-icon" style="background:rgba(var(--danger)/0.12);">
+            <i data-lucide="alert-circle" style="width:22px;height:22px;color:rgb(var(--danger));"></i>
+          </div>
+          <div>
+            <div class="stat-label">Overdue</div>
+            <div class="stat-value" id="stat-overdue">—</div>
+            <div class="stat-sub">Items past due date</div>
+          </div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-icon" style="background:rgba(var(--success)/0.12);">
+            <i data-lucide="banknote" style="width:22px;height:22px;color:rgb(var(--success));"></i>
+          </div>
+          <div>
+            <div class="stat-label">Fines Collected Today</div>
+            <div class="stat-value" id="stat-fines">—</div>
+            <div class="stat-sub">Paid today</div>
+          </div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-icon" style="background:rgba(var(--accent)/0.12);">
+            <i data-lucide="user-x" style="width:22px;height:22px;color:rgb(var(--accent));"></i>
+          </div>
+          <div>
+            <div class="stat-label">Accounts on Hold</div>
+            <div class="stat-value" id="stat-members">—</div>
+            <div class="stat-sub">Non-active members</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Overdue Table + Activity Feed -->
+      <div style="display:grid;grid-template-columns:3fr 2fr;gap:1.25rem;" class="dash-grid">
+
+        <!-- Recent Overdue -->
+        <div class="card">
+          <div class="card-header">
+            <div style="display:flex;align-items:center;gap:0.5rem;">
+              <i data-lucide="alert-circle" style="width:15px;height:15px;color:rgb(var(--danger));"></i>
+              <span class="card-title">Recent Overdue</span>
+            </div>
+            <a href="/staff/overdue.html" style="font-size:0.8125rem;color:rgb(var(--info));font-weight:600;">View All</a>
+          </div>
+          <div id="overdue-table"></div>
+        </div>
+
+        <!-- Activity Feed -->
+        <div class="card">
+          <div class="card-header">
+            <div style="display:flex;align-items:center;gap:0.5rem;">
+              <i data-lucide="activity" style="width:15px;height:15px;color:rgb(var(--text-muted));"></i>
+              <span class="card-title">Recent Activity</span>
+            </div>
+          </div>
+          <div class="card-body" style="padding:0;" id="activity-feed"></div>
+        </div>
+      </div>
+
+    </div>
+  </div>
+
+  <script>
+    window.PAGE_TITLE = 'Dashboard';
+  </script>
+  <script src="/js/staff-layout.js"></script>
+  <script>
+    lucide.createIcons();
+
+    async function loadDashboard() {
+      try {
+        const today = new Date().toISOString().split('T')[0];
+        const [loans, members, fines, logs] = await Promise.all([
+          API.get('/loans'),
+          API.get('/members'),
+          API.get('/fines'),
+          API.get('/logs?limit=10')
+        ]);
+
+        const activeLoans = loans.filter(l => ['active','due_today'].includes(l.status));
+        const overdueLoans = loans.filter(l => l.status === 'overdue');
+
+        // Fines collected today: paid fines where paid_date = today
+        const collectedToday = fines
+          .filter(f => f.status === 'paid' && f.paid_date && f.paid_date.startsWith(today))
+          .reduce((s, f) => s + f.amount, 0);
+
+        // Accounts on hold: members not active
+        const onHold = members.filter(m => m.status !== 'active').length;
+
+        document.getElementById('stat-active').textContent = activeLoans.length;
+        document.getElementById('stat-overdue').textContent = overdueLoans.length;
+        document.getElementById('stat-fines').textContent = formatCurrency(collectedToday);
+        document.getElementById('stat-members').textContent = onHold;
+
+        // Overdue table
+        renderTable('overdue-table', [
+          { key: 'member_name', label: 'Member', render: v => `<span style="font-weight:600;">${v}</span>` },
+          { key: 'item_title', label: 'Item', render: v => `<div style="max-width:180px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${v}</div>` },
+          { key: 'due_date', label: 'Days Overdue', render: v => {
+            const d = daysOverdue(v);
+            return `<span style="color:rgb(var(--danger));font-weight:600;">${d}d</span>`;
+          }},
+        ], overdueLoans.slice(0, 8), { emptyMessage: 'No overdue loans!' });
+
+        // Activity feed
+        const feed = document.getElementById('activity-feed');
+        if (!logs || logs.length === 0) {
+          feed.innerHTML = '<div style="padding:1.5rem;text-align:center;color:rgb(var(--text-muted));font-size:0.875rem;">No recent activity.</div>';
+        } else {
+          feed.innerHTML = logs.slice(0, 10).map((log, i, arr) => `
+            <div style="padding:0.75rem 1rem;${i < arr.length - 1 ? 'border-bottom:1px solid rgb(var(--border));' : ''}">
+              <div style="font-size:0.8125rem;color:rgb(var(--text-primary));">${log.details || log.action}</div>
+              <div style="display:flex;align-items:center;gap:0.375rem;margin-top:0.25rem;">
+                <span style="font-size:0.75rem;color:rgb(var(--text-muted));">${log.user_name || 'System'}</span>
+                <span style="font-size:0.75rem;color:rgb(var(--text-muted));">·</span>
+                <span style="font-size:0.75rem;color:rgb(var(--text-muted));">${timeAgo(log.created_at)}</span>
+              </div>
+            </div>
+          `).join('');
+        }
+
+        lucide.createIcons();
+      } catch (err) {
+        showToast('Failed to load dashboard data.', 'error');
+      }
+    }
+
+    loadDashboard();
+  </script>
+  <style>
+    @media (max-width: 900px) {
+      .dash-grid { grid-template-columns: 1fr !important; }
+    }
+  </style>
+</body>
+</html>

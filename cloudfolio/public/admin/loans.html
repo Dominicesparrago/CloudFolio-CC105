@@ -1,0 +1,203 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Loans — CloudFolio Admin</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800&family=Crimson+Pro:ital,wght@0,400;0,600;0,700;1,400&family=Courier+Prime:wght@400;700&display=swap" rel="stylesheet">
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>tailwind.config = { darkMode: 'class' }</script>
+  <link rel="stylesheet" href="/css/main.css">
+  <script src="/js/theme.js"></script>
+  <script src="/js/api.js"></script>
+  <script src="/js/toast.js"></script>
+  <script src="/js/ui.js"></script>
+  <script src="https://unpkg.com/lucide@latest/dist/umd/lucide.js"></script>
+</head>
+<body data-page-title="Loans & Checkouts">
+  <div id="sidebar-container"></div>
+  <div class="main-content">
+    <div id="topbar-container"></div>
+    <div class="page-body fade-in">
+      <div class="card">
+        <div class="card-header">
+          <div class="page-header" style="margin-bottom:0;width:100%;">
+            <span class="card-title" style="font-size:1rem;">Loans & Checkouts</span>
+            <button id="btn-new-loan" class="btn btn-primary btn-sm" style="gap:0.375rem;">
+              <i data-lucide="plus" style="width:14px;height:14px;"></i>
+              New Loan
+            </button>
+          </div>
+        </div>
+        <div class="filter-bar">
+          <select id="filter-status" class="form-control" style="max-width:160px;">
+            <option value="">All Statuses</option>
+            <option value="active">Active</option>
+            <option value="due_today">Due Today</option>
+            <option value="overdue">Overdue</option>
+            <option value="returned">Returned</option>
+          </select>
+          <input type="text" id="search-input" class="form-control" placeholder="Search member or title..." style="max-width:260px;">
+          <button id="btn-clear" class="btn btn-ghost btn-sm">Clear</button>
+        </div>
+        <div id="loans-table"></div>
+      </div>
+    </div>
+  </div>
+
+  <script>window.PAGE_TITLE = 'Loans & Checkouts';</script>
+  <script src="/js/admin-layout.js"></script>
+  <script>
+    lucide.createIcons();
+
+    let allLoans = [];
+    let tableCtrl = null;
+    let allMembers = [];
+
+    function applyFilters() {
+      const status = document.getElementById('filter-status').value;
+      const search = document.getElementById('search-input').value.toLowerCase();
+      const filtered = allLoans.filter(l => {
+        const matchStatus = !status || l.status === status;
+        const matchSearch = !search ||
+          (l.member_name && l.member_name.toLowerCase().includes(search)) ||
+          (l.item_title && l.item_title.toLowerCase().includes(search));
+        return matchStatus && matchSearch;
+      });
+      if (tableCtrl) tableCtrl.update(filtered);
+    }
+
+    async function loadLoans() {
+      try {
+        allLoans = await API.get('/loans');
+        tableCtrl = renderTable('loans-table', [
+          { key: 'id', label: 'ID', render: v => `<span class="mono" style="font-size:0.75rem;color:rgb(var(--text-muted));">#${v}</span>` },
+          { key: 'member_name', label: 'Member', render: v => `<span style="font-weight:600;">${v}</span>` },
+          { key: 'item_title', label: 'Item Title', render: (v, row) => `<div style="max-width:200px;"><div style="font-weight:500;">${v}</div><div style="font-size:0.75rem;color:rgb(var(--text-muted));">${row.item_author || ''}</div></div>` },
+          { key: 'item_type', label: 'Type', render: v => `<span class="badge badge-info">${v}</span>` },
+          { key: 'borrowed_date', label: 'Borrowed', render: v => formatDate(v) },
+          { key: 'due_date', label: 'Due Date', render: v => formatDate(v) },
+          { key: 'status', label: 'Status', render: v => statusBadge(v) },
+          { key: 'id', label: 'Actions', sortable: false, render: (v, row) => {
+            const canReturn = ['active','overdue','due_today'].includes(row.status);
+            const canRenew = ['active','due_today'].includes(row.status);
+            return `<div style="display:flex;gap:0.375rem;">
+              ${canReturn ? `<button class="btn btn-success btn-sm action-return" data-id="${v}">Return</button>` : ''}
+              ${canRenew ? `<button class="btn btn-secondary btn-sm action-renew" data-id="${v}">Renew</button>` : ''}
+            </div>`;
+          }}
+        ], allLoans, { onRowClick: row => showLoanDrawer(row), emptyMessage: 'No loans found.' });
+
+        document.getElementById('loans-table').addEventListener('click', async e => {
+          const returnBtn = e.target.closest('.action-return');
+          const renewBtn = e.target.closest('.action-renew');
+          if (returnBtn) { e.stopPropagation(); await handleAction(returnBtn.dataset.id, 'return', returnBtn); }
+          if (renewBtn) { e.stopPropagation(); await handleAction(renewBtn.dataset.id, 'renew', renewBtn); }
+        });
+
+        lucide.createIcons();
+      } catch (err) { showToast('Failed to load loans.', 'error'); }
+    }
+
+    async function handleAction(id, action, btn) {
+      if (!confirm(`Confirm ${action}?`)) return;
+      btn.disabled = true; btn.textContent = '...';
+      try {
+        await API.put('/loans/' + id, { action });
+        showToast(`Loan ${action === 'return' ? 'returned' : 'renewed'}!`, 'success');
+        await loadLoans(); applyFilters();
+      } catch (err) {
+        showToast(err.message, 'error');
+        btn.disabled = false; btn.textContent = action === 'return' ? 'Return' : 'Renew';
+      }
+    }
+
+    function showLoanDrawer(loan) {
+      openDrawer('Loan Details', `
+        <div>
+          <div style="display:flex;align-items:center;gap:0.5rem;margin-bottom:1.25rem;">${statusBadge(loan.status)}<span style="font-size:0.75rem;color:rgb(var(--text-muted));">Loan #${loan.id}</span></div>
+          <div style="margin-bottom:1.25rem;">
+            <div style="font-family:'Crimson Pro',serif;font-size:1.125rem;font-weight:700;">${loan.item_title}</div>
+            ${loan.item_author ? `<div style="color:rgb(var(--text-muted));font-size:0.875rem;">by ${loan.item_author}</div>` : ''}
+          </div>
+          <div class="detail-row"><span class="detail-label">Member</span><span class="detail-value" style="font-weight:600;">${loan.member_name}</span></div>
+          <div class="detail-row"><span class="detail-label">Item Type</span><span class="detail-value">${loan.item_type}</span></div>
+          ${loan.item_call_no ? `<div class="detail-row"><span class="detail-label">Call No.</span><span class="detail-value mono">${loan.item_call_no}</span></div>` : ''}
+          <div class="detail-row"><span class="detail-label">Borrowed</span><span class="detail-value">${formatDate(loan.borrowed_date)}</span></div>
+          <div class="detail-row"><span class="detail-label">Due Date</span><span class="detail-value">${formatDate(loan.due_date)}</span></div>
+          ${loan.returned_date ? `<div class="detail-row"><span class="detail-label">Returned</span><span class="detail-value">${formatDate(loan.returned_date)}</span></div>` : ''}
+          <div class="detail-row"><span class="detail-label">Renewals</span><span class="detail-value">${loan.renewed_count}</span></div>
+          ${['active','overdue','due_today'].includes(loan.status) ? `
+            <div style="display:flex;gap:0.5rem;margin-top:1.25rem;">
+              <button class="btn btn-success" style="flex:1;" onclick="handleAction(${loan.id},'return',this);closeDrawer();">Return</button>
+              ${['active','due_today'].includes(loan.status) ? `<button class="btn btn-secondary" style="flex:1;" onclick="handleAction(${loan.id},'renew',this);closeDrawer();">Renew</button>` : ''}
+            </div>
+          ` : ''}
+        </div>
+      `);
+      lucide.createIcons();
+    }
+
+    async function openNewLoanModal() {
+      if (!allMembers.length) allMembers = await API.get('/members');
+      const active = allMembers.filter(m => m.status === 'active');
+      const today = new Date();
+      const def = new Date(today); def.setDate(def.getDate() + 14);
+      const defStr = def.toISOString().split('T')[0];
+      const opts = active.map(m => `<option value="${m.id}">${m.name} (${m.email})</option>`).join('');
+
+      openModal('New Loan', `
+        <div class="form-group"><label class="form-label">Member *</label>
+          <select id="loan-member" class="form-control"><option value="">Select a member...</option>${opts}</select>
+          <div class="form-error" id="loan-member-error"></div></div>
+        <div class="form-group"><label class="form-label">Item Title *</label>
+          <input type="text" id="loan-title" class="form-control" placeholder="Item title" required>
+          <div class="form-error" id="loan-title-error"></div></div>
+        <div class="form-group"><label class="form-label">Author</label>
+          <input type="text" id="loan-author" class="form-control" placeholder="Author name"></div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:0.75rem;">
+          <div class="form-group"><label class="form-label">Type</label>
+            <select id="loan-type" class="form-control">
+              <option value="book">Book</option><option value="magazine">Magazine</option>
+              <option value="dvd">DVD</option><option value="other">Other</option>
+            </select></div>
+          <div class="form-group"><label class="form-label">Call No.</label>
+            <input type="text" id="loan-callno" class="form-control" placeholder="e.g., FIC-001"></div>
+        </div>
+        <div class="form-group"><label class="form-label">Due Date *</label>
+          <input type="date" id="loan-due" class="form-control" value="${defStr}" required>
+          <div class="form-error" id="loan-due-error"></div></div>
+      `, {
+        confirmText: 'Create Loan',
+        onConfirm: async () => {
+          const memberId = document.getElementById('loan-member').value;
+          const title = document.getElementById('loan-title').value.trim();
+          const dueDate = document.getElementById('loan-due').value;
+          if (!memberId) { document.getElementById('loan-member-error').textContent = 'Select a member.'; return; }
+          if (!title) { document.getElementById('loan-title-error').textContent = 'Title required.'; return; }
+          if (!dueDate) { document.getElementById('loan-due-error').textContent = 'Due date required.'; return; }
+          const btn = document.getElementById('modal-confirm-btn');
+          btn.disabled = true; btn.innerHTML = '<span class="spinner"></span> Creating...';
+          try {
+            await API.post('/loans', { member_id: parseInt(memberId), item_title: title, item_author: document.getElementById('loan-author').value.trim() || null, item_type: document.getElementById('loan-type').value, item_call_no: document.getElementById('loan-callno').value.trim() || null, due_date: dueDate });
+            showToast('Loan created!', 'success'); closeModal(); await loadLoans();
+          } catch (err) { showToast(err.message, 'error'); btn.disabled = false; btn.innerHTML = 'Create Loan'; }
+        }
+      });
+      lucide.createIcons();
+    }
+
+    document.getElementById('btn-new-loan').addEventListener('click', openNewLoanModal);
+    document.getElementById('filter-status').addEventListener('change', applyFilters);
+    document.getElementById('search-input').addEventListener('input', applyFilters);
+    document.getElementById('btn-clear').addEventListener('click', () => {
+      document.getElementById('filter-status').value = '';
+      document.getElementById('search-input').value = '';
+      applyFilters();
+    });
+
+    loadLoans();
+  </script>
+</body>
+</html>

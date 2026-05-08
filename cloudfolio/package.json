@@ -1,0 +1,26 @@
+{
+  "name": "cloudfolio",
+  "version": "1.0.0",
+  "description": "CloudFolio - Library Management System",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js",
+    "dev": "nodemon server.js"
+  },
+  "dependencies": {
+    "bcryptjs": "^2.4.3",
+    "better-sqlite3": "^12.9.0",
+    "express": "^4.18.2",
+    "express-session": "^1.17.3"
+  },
+  "devDependencies": {
+    "nodemon": "^3.0.3"
+  },
+  "keywords": [
+    "library",
+    "management",
+    "cloudfolio"
+  ],
+  "author": "",
+  "license": "ISC"
+}

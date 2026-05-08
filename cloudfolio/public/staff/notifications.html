@@ -1,0 +1,182 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Notifications — CloudFolio Staff</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800&family=Crimson+Pro:ital,wght@0,400;0,600;0,700;1,400&family=Courier+Prime:wght@400;700&display=swap" rel="stylesheet">
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>tailwind.config = { darkMode: 'class' }</script>
+  <link rel="stylesheet" href="/css/main.css">
+  <script src="/js/theme.js"></script>
+  <script src="/js/api.js"></script>
+  <script src="/js/toast.js"></script>
+  <script src="/js/ui.js"></script>
+  <script src="https://unpkg.com/lucide@latest/dist/umd/lucide.js"></script>
+</head>
+<body data-page-title="Notifications">
+  <div id="sidebar-container"></div>
+  <div class="main-content">
+    <div id="topbar-container"></div>
+    <div class="page-body fade-in">
+      <div class="card">
+        <div class="card-header">
+          <span class="card-title">Notifications</span>
+          <button id="btn-new-notif" class="btn btn-primary btn-sm" style="gap:0.375rem;">
+            <i data-lucide="plus" style="width:14px;height:14px;"></i>
+            New Notification
+          </button>
+        </div>
+        <div class="filter-bar">
+          <select id="filter-type" class="form-control" style="max-width:160px;">
+            <option value="">All Types</option>
+            <option value="overdue">Overdue</option>
+            <option value="reminder">Reminder</option>
+            <option value="info">Info</option>
+            <option value="warning">Warning</option>
+          </select>
+          <select id="filter-sent" class="form-control" style="max-width:160px;">
+            <option value="">All Status</option>
+            <option value="0">Pending</option>
+            <option value="1">Sent</option>
+          </select>
+          <button id="btn-clear" class="btn btn-ghost btn-sm">Clear</button>
+        </div>
+        <div id="notifs-table"></div>
+      </div>
+    </div>
+  </div>
+
+  <script>window.PAGE_TITLE = 'Notifications';</script>
+  <script src="/js/staff-layout.js"></script>
+  <script>
+    lucide.createIcons();
+
+    let allNotifs = [];
+    let tableCtrl = null;
+    let allMembers = [];
+
+    function applyFilters() {
+      const type = document.getElementById('filter-type').value;
+      const sent = document.getElementById('filter-sent').value;
+      const filtered = allNotifs.filter(n => {
+        const matchType = !type || n.type === type;
+        const matchSent = sent === '' || String(n.sent) === sent;
+        return matchType && matchSent;
+      });
+      if (tableCtrl) tableCtrl.update(filtered);
+    }
+
+    async function loadNotifications() {
+      try {
+        allNotifs = await API.get('/notifications');
+        tableCtrl = renderTable('notifs-table', [
+          { key: 'member_name', label: 'Member', render: v => v ? `<span style="font-weight:600;">${v}</span>` : '<span class="badge badge-info">All Members</span>' },
+          { key: 'title', label: 'Title', render: v => `<span style="font-weight:600;">${v}</span>` },
+          { key: 'type', label: 'Type', render: v => statusBadge(v === 'overdue' ? 'overdue-type' : v, v) },
+          { key: 'message', label: 'Message', render: v => `<span style="font-size:0.8125rem;color:rgb(var(--text-secondary));max-width:220px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;display:block;">${v}</span>` },
+          { key: 'sent', label: 'Status', render: v => v ? `<span class="badge badge-active">Sent</span>` : `<span class="badge badge-warning">Pending</span>` },
+          { key: 'created_at', label: 'Created', render: v => formatDate(v) },
+          { key: 'id', label: 'Actions', sortable: false, render: (v, row) => {
+            if (row.sent) return `<span style="color:rgb(var(--text-subtle));font-size:0.8125rem;">Sent ${formatDate(row.sent_at)}</span>`;
+            return `<button class="btn btn-sm btn-info action-send" data-id="${v}"><i data-lucide="send" style="width:12px;height:12px;"></i> Send</button>`;
+          }}
+        ], allNotifs, { emptyMessage: 'No notifications found.' });
+
+        document.getElementById('notifs-table').addEventListener('click', async e => {
+          const sendBtn = e.target.closest('.action-send');
+          if (sendBtn) {
+            e.stopPropagation();
+            sendBtn.disabled = true;
+            try {
+              await API.put('/notifications/' + sendBtn.dataset.id, {});
+              showToast('Notification marked as sent!', 'success');
+              await loadNotifications(); applyFilters();
+            } catch (err) {
+              showToast(err.message, 'error');
+              sendBtn.disabled = false;
+            }
+          }
+        });
+
+        lucide.createIcons();
+      } catch (err) {
+        showToast('Failed to load notifications.', 'error');
+      }
+    }
+
+    async function openNewNotifModal() {
+      if (!allMembers.length) allMembers = await API.get('/members');
+      const memberOptions = allMembers.map(m => `<option value="${m.id}">${m.name}</option>`).join('');
+
+      openModal('New Notification', `
+        <div class="form-group">
+          <label class="form-label">Member</label>
+          <select id="notif-member" class="form-control">
+            <option value="">All Members (Broadcast)</option>
+            ${memberOptions}
+          </select>
+        </div>
+        <div class="form-group">
+          <label class="form-label">Title *</label>
+          <input type="text" id="notif-title" class="form-control" placeholder="e.g., Overdue Notice" required>
+          <div class="form-error" id="notif-title-error"></div>
+        </div>
+        <div class="form-group">
+          <label class="form-label">Message *</label>
+          <textarea id="notif-message" class="form-control" rows="3" placeholder="Notification message..." required style="resize:vertical;"></textarea>
+          <div class="form-error" id="notif-message-error"></div>
+        </div>
+        <div class="form-group">
+          <label class="form-label">Type</label>
+          <select id="notif-type" class="form-control">
+            <option value="info">Info</option>
+            <option value="reminder">Reminder</option>
+            <option value="warning">Warning</option>
+            <option value="overdue">Overdue</option>
+          </select>
+        </div>
+      `, {
+        confirmText: 'Create Notification',
+        onConfirm: async () => {
+          const memberId = document.getElementById('notif-member').value;
+          const title = document.getElementById('notif-title').value.trim();
+          const message = document.getElementById('notif-message').value.trim();
+          const type = document.getElementById('notif-type').value;
+
+          let valid = true;
+          if (!title) { document.getElementById('notif-title-error').textContent = 'Title is required.'; valid = false; }
+          if (!message) { document.getElementById('notif-message-error').textContent = 'Message is required.'; valid = false; }
+          if (!valid) return;
+
+          const confirmBtn = document.getElementById('modal-confirm-btn');
+          confirmBtn.disabled = true; confirmBtn.innerHTML = '<span class="spinner"></span> Creating...';
+
+          try {
+            await API.post('/notifications', { member_id: memberId ? parseInt(memberId) : null, title, message, type });
+            showToast('Notification created!', 'success');
+            closeModal();
+            loadNotifications();
+          } catch (err) {
+            showToast(err.message, 'error');
+            confirmBtn.disabled = false; confirmBtn.innerHTML = 'Create Notification';
+          }
+        }
+      });
+      lucide.createIcons();
+    }
+
+    document.getElementById('btn-new-notif').addEventListener('click', openNewNotifModal);
+    document.getElementById('filter-type').addEventListener('change', applyFilters);
+    document.getElementById('filter-sent').addEventListener('change', applyFilters);
+    document.getElementById('btn-clear').addEventListener('click', () => {
+      document.getElementById('filter-type').value = '';
+      document.getElementById('filter-sent').value = '';
+      applyFilters();
+    });
+
+    loadNotifications();
+  </script>
+</body>
+</html>
