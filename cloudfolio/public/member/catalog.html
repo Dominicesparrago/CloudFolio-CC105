@@ -1,0 +1,264 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Book Catalog — CloudFolio</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800&family=Crimson+Pro:ital,wght@0,400;0,600;0,700;1,400&family=Courier+Prime:wght@400;700&display=swap" rel="stylesheet">
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>tailwind.config = { darkMode: 'class' }</script>
+  <link rel="stylesheet" href="/css/main.css">
+  <script src="/js/theme.js"></script>
+  <script src="/js/api.js"></script>
+  <script src="/js/toast.js"></script>
+  <script src="/js/ui.js"></script>
+  <script src="https://unpkg.com/lucide@latest/dist/umd/lucide.js"></script>
+  <style>
+    .book-card {
+      background: rgb(var(--surface));
+      border: 1px solid rgb(var(--border));
+      border-radius: 0.875rem;
+      padding: 1.375rem;
+      display: flex;
+      flex-direction: column;
+      gap: 0.875rem;
+      transition: box-shadow 0.2s, border-color 0.2s, transform 0.2s;
+    }
+    .book-card:hover {
+      box-shadow: var(--shadow-md);
+      border-color: rgba(var(--accent) / 0.3);
+      transform: translateY(-2px);
+    }
+    .type-icon-book    { background: rgba(var(--info) / 0.12); color: rgb(var(--info)); }
+    .type-icon-magazine { background: rgba(var(--success) / 0.12); color: rgb(var(--success)); }
+    .type-icon-dvd     { background: rgba(var(--accent) / 0.12); color: rgb(var(--accent)); }
+    .type-icon-other   { background: rgba(var(--text-muted) / 0.15); color: rgb(var(--text-muted)); }
+    .pill-filter {
+      padding: 0.35rem 0.875rem;
+      border-radius: 999px;
+      font-size: 0.8125rem;
+      font-weight: 500;
+      border: 1px solid rgb(var(--border));
+      background: rgb(var(--surface));
+      color: rgb(var(--text-secondary));
+      cursor: pointer;
+      transition: all 0.15s;
+      white-space: nowrap;
+    }
+    .pill-filter:hover { border-color: rgba(var(--accent)/0.4); color: rgb(var(--accent)); }
+    .pill-filter.active {
+      background: rgb(var(--accent));
+      border-color: rgb(var(--accent));
+      color: #fff;
+    }
+  </style>
+</head>
+<body style="background:rgb(var(--bg));min-height:100vh;">
+
+  <!-- Header -->
+  <header style="background:rgb(var(--surface));border-bottom:1px solid rgb(var(--border));padding:0 1.5rem;height:64px;display:flex;align-items:center;justify-content:space-between;position:sticky;top:0;z-index:20;box-shadow:var(--shadow-sm);">
+    <div style="display:flex;align-items:center;gap:1.25rem;">
+      <a href="/member/account.html" style="display:flex;align-items:center;gap:0.5rem;text-decoration:none;">
+        <i data-lucide="library" style="width:20px;height:20px;color:rgb(var(--accent));"></i>
+        <span style="font-family:'Crimson Pro',Georgia,serif;font-size:1.25rem;font-weight:700;color:rgb(var(--text-primary));">Cloud<span style="color:rgb(var(--accent));">Folio</span></span>
+      </a>
+      <nav style="display:flex;gap:0.25rem;">
+        <a href="/member/account.html" style="padding:0.375rem 0.875rem;border-radius:0.5rem;font-size:0.875rem;font-weight:500;color:rgb(var(--text-secondary));text-decoration:none;transition:background 0.15s,color 0.15s;" onmouseover="this.style.background='rgb(var(--surface-2))'" onmouseout="this.style.background='transparent'">My Account</a>
+        <a href="/member/catalog.html" style="padding:0.375rem 0.875rem;border-radius:0.5rem;font-size:0.875rem;font-weight:600;color:rgb(var(--accent));background:rgba(var(--accent)/0.08);text-decoration:none;">Catalog</a>
+      </nav>
+    </div>
+    <div style="display:flex;align-items:center;gap:0.75rem;">
+      <div id="user-badge" style="display:flex;align-items:center;gap:0.5rem;font-size:0.875rem;color:rgb(var(--text-secondary));"></div>
+      <button id="theme-toggle" class="btn btn-ghost btn-icon" aria-label="Toggle theme">
+        <span class="theme-sun"><i data-lucide="sun" style="width:16px;height:16px;"></i></span>
+        <span class="theme-moon"><i data-lucide="moon" style="width:16px;height:16px;"></i></span>
+      </button>
+      <button id="logout-btn" class="btn btn-secondary btn-sm" style="display:flex;align-items:center;gap:0.375rem;">
+        <i data-lucide="log-out" style="width:14px;height:14px;"></i>
+        Logout
+      </button>
+    </div>
+  </header>
+
+  <main style="max-width:1200px;margin:0 auto;padding:1.5rem 1.5rem 3rem;" class="fade-in">
+
+    <!-- Page heading + search row -->
+    <div style="margin-bottom:1.5rem;">
+      <h1 style="font-family:'Crimson Pro',Georgia,serif;font-size:1.875rem;font-weight:700;color:rgb(var(--text-primary));margin-bottom:0.25rem;">Book Catalog</h1>
+      <p style="font-size:0.875rem;color:rgb(var(--text-muted));">Browse the library collection</p>
+    </div>
+
+    <!-- Search + filters bar -->
+    <div style="display:flex;flex-wrap:wrap;gap:0.75rem;align-items:center;margin-bottom:1.25rem;">
+      <div style="position:relative;flex:1;min-width:220px;max-width:380px;">
+        <i data-lucide="search" style="position:absolute;left:0.75rem;top:50%;transform:translateY(-50%);width:15px;height:15px;color:rgb(var(--text-muted));pointer-events:none;"></i>
+        <input id="search-input" type="text" placeholder="Search title or author…" class="form-control" style="padding-left:2.25rem;">
+      </div>
+      <select id="filter-type" class="form-control" style="max-width:150px;">
+        <option value="">All Types</option>
+        <option value="book">Books</option>
+        <option value="magazine">Magazines</option>
+        <option value="dvd">DVDs</option>
+        <option value="other">Other</option>
+      </select>
+      <div style="display:flex;gap:0.5rem;flex-wrap:wrap;" id="category-pills">
+        <button class="pill-filter active" data-cat="">All</button>
+      </div>
+      <div style="margin-left:auto;">
+        <select id="filter-avail" class="form-control" style="max-width:160px;">
+          <option value="">All Items</option>
+          <option value="available">Available</option>
+          <option value="on_loan">On Loan</option>
+        </select>
+      </div>
+    </div>
+
+    <!-- Result count -->
+    <div id="result-count" style="font-size:0.8125rem;color:rgb(var(--text-muted));margin-bottom:1rem;"></div>
+
+    <!-- Loading -->
+    <div id="loading-state" style="display:flex;align-items:center;justify-content:center;padding:5rem;flex-direction:column;gap:1rem;">
+      <div class="spinner spinner-dark" style="width:32px;height:32px;border-width:3px;"></div>
+      <span style="color:rgb(var(--text-muted));">Loading catalog…</span>
+    </div>
+
+    <!-- Book grid -->
+    <div id="book-grid" style="display:none;grid-template-columns:repeat(auto-fill,minmax(270px,1fr));gap:1rem;"></div>
+
+    <!-- Empty state -->
+    <div id="empty-state" style="display:none;text-align:center;padding:5rem 2rem;color:rgb(var(--text-muted));">
+      <i data-lucide="search-x" style="width:40px;height:40px;margin-bottom:1rem;opacity:0.4;display:inline-block;"></i>
+      <p style="font-size:1rem;font-weight:600;color:rgb(var(--text-secondary));margin-bottom:0.25rem;">No books found</p>
+      <p style="font-size:0.875rem;">Try adjusting your search or filters.</p>
+    </div>
+
+  </main>
+
+  <script>
+    lucide.createIcons();
+
+    document.getElementById('theme-toggle').addEventListener('click', () => toggleTheme());
+
+    let allBooks = [];
+    let activeCategory = '';
+
+    function typeIcon(type) {
+      const icons = { book: 'book', magazine: 'newspaper', dvd: 'disc', other: 'package' };
+      return icons[type] || 'book';
+    }
+
+    function availBadge(available, total) {
+      if (available > 0) {
+        return `<span style="display:inline-flex;align-items:center;gap:0.3rem;padding:0.25rem 0.625rem;border-radius:999px;font-size:0.7rem;font-weight:600;background:rgba(var(--success)/0.12);color:rgb(var(--success));"><i data-lucide="circle-check" style="width:10px;height:10px;"></i>Available</span>`;
+      }
+      return `<span style="display:inline-flex;align-items:center;gap:0.3rem;padding:0.25rem 0.625rem;border-radius:999px;font-size:0.7rem;font-weight:600;background:rgba(var(--danger)/0.12);color:rgb(var(--danger));"><i data-lucide="circle-minus" style="width:10px;height:10px;"></i>On Loan</span>`;
+    }
+
+    function categoryBadge(cat) {
+      if (!cat) return '';
+      return `<span style="padding:0.2rem 0.5rem;border-radius:0.375rem;font-size:0.7rem;font-weight:500;background:rgb(var(--surface-2));color:rgb(var(--text-muted));">${cat}</span>`;
+    }
+
+    function renderGrid(books) {
+      const grid = document.getElementById('book-grid');
+      const empty = document.getElementById('empty-state');
+      const count = document.getElementById('result-count');
+
+      count.textContent = `${books.length} item${books.length !== 1 ? 's' : ''} found`;
+
+      if (books.length === 0) {
+        grid.style.display = 'none';
+        empty.style.display = 'block';
+        lucide.createIcons({ nodes: [empty] });
+        return;
+      }
+
+      empty.style.display = 'none';
+      grid.style.display = 'grid';
+      grid.innerHTML = books.map(b => `
+        <div class="book-card">
+          <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:0.75rem;">
+            <div style="width:48px;height:48px;border-radius:0.75rem;display:flex;align-items:center;justify-content:center;flex-shrink:0;" class="type-icon-${b.type}">
+              <i data-lucide="${typeIcon(b.type)}" style="width:22px;height:22px;"></i>
+            </div>
+            ${availBadge(b.available_copies, b.total_copies)}
+          </div>
+          <div>
+            <div style="font-family:'Crimson Pro',Georgia,serif;font-size:1.0625rem;font-weight:700;color:rgb(var(--text-primary));line-height:1.3;margin-bottom:0.25rem;">${b.title}</div>
+            <div style="font-size:0.8125rem;color:rgb(var(--text-secondary));">${b.author}</div>
+            ${b.published_year ? `<div style="font-size:0.75rem;color:rgb(var(--text-muted));margin-top:0.125rem;">${b.published_year}</div>` : ''}
+          </div>
+          <div style="border-top:1px solid rgb(var(--border));padding-top:0.75rem;display:flex;flex-wrap:wrap;align-items:center;gap:0.375rem;">
+            <span class="mono" style="font-size:0.7rem;color:rgb(var(--text-muted));background:rgb(var(--surface-2));padding:0.2rem 0.5rem;border-radius:0.375rem;">${b.call_no || '—'}</span>
+            ${categoryBadge(b.category)}
+            <span style="margin-left:auto;font-size:0.75rem;color:rgb(var(--text-muted));">${b.available_copies}/${b.total_copies} available</span>
+          </div>
+        </div>
+      `).join('');
+      lucide.createIcons({ nodes: [grid] });
+    }
+
+    function buildCategoryPills(books) {
+      const cats = [...new Set(books.map(b => b.category).filter(Boolean))].sort();
+      const container = document.getElementById('category-pills');
+      container.innerHTML = `<button class="pill-filter active" data-cat="">All</button>` +
+        cats.map(c => `<button class="pill-filter" data-cat="${c}">${c}</button>`).join('');
+      container.addEventListener('click', e => {
+        const btn = e.target.closest('.pill-filter');
+        if (!btn) return;
+        activeCategory = btn.dataset.cat;
+        container.querySelectorAll('.pill-filter').forEach(b => b.classList.remove('active'));
+        btn.classList.add('active');
+        applyFilters();
+      });
+    }
+
+    function applyFilters() {
+      const search = document.getElementById('search-input').value.toLowerCase();
+      const type = document.getElementById('filter-type').value;
+      const avail = document.getElementById('filter-avail').value;
+      const filtered = allBooks.filter(b => {
+        if (search && !b.title.toLowerCase().includes(search) && !b.author.toLowerCase().includes(search)) return false;
+        if (type && b.type !== type) return false;
+        if (activeCategory && b.category !== activeCategory) return false;
+        if (avail === 'available' && b.available_copies <= 0) return false;
+        if (avail === 'on_loan' && b.available_copies > 0) return false;
+        return true;
+      });
+      renderGrid(filtered);
+    }
+
+    async function init() {
+      try {
+        const user = await API.get('/auth/me');
+        if (!user || user.role !== 'member') { window.location.href = '/member/login.html'; return; }
+        document.getElementById('user-badge').innerHTML = `
+          <i data-lucide="user-circle" style="width:16px;height:16px;"></i>
+          <span>${user.name}</span>
+        `;
+        lucide.createIcons({ nodes: [document.getElementById('user-badge')] });
+      } catch { window.location.href = '/member/login.html'; return; }
+
+      try {
+        allBooks = await API.get('/books');
+        document.getElementById('loading-state').style.display = 'none';
+        buildCategoryPills(allBooks);
+        renderGrid(allBooks);
+      } catch (err) {
+        document.getElementById('loading-state').innerHTML = `<span style="color:rgb(var(--danger));">Failed to load catalog.</span>`;
+      }
+
+      document.getElementById('search-input').addEventListener('input', applyFilters);
+      document.getElementById('filter-type').addEventListener('change', applyFilters);
+      document.getElementById('filter-avail').addEventListener('change', applyFilters);
+      document.getElementById('logout-btn').addEventListener('click', async () => {
+        try { await API.post('/auth/logout'); } catch (_) {}
+        window.location.href = '/member/login.html';
+      });
+    }
+
+    init();
+  </script>
+</body>
+</html>

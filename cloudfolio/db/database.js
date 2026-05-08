@@ -80,6 +80,20 @@ db.exec(`
     details TEXT,
     created_at TEXT NOT NULL DEFAULT (datetime('now'))
   );
+
+  CREATE TABLE IF NOT EXISTS books (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    title TEXT NOT NULL,
+    author TEXT NOT NULL,
+    isbn TEXT,
+    category TEXT,
+    call_no TEXT,
+    type TEXT NOT NULL DEFAULT 'book' CHECK(type IN ('book', 'magazine', 'dvd', 'other')),
+    total_copies INTEGER NOT NULL DEFAULT 1,
+    available_copies INTEGER NOT NULL DEFAULT 1,
+    published_year INTEGER,
+    added_at TEXT NOT NULL DEFAULT (datetime('now'))
+  );
 `);
 
 // Check if already seeded
@@ -188,6 +202,37 @@ if (userCount.count === 0) {
   insertLog.run(staffId, 'Maria Reyes', 'LOGIN', 'auth', null, 'Staff login', '2026-05-07 08:00:00');
 
   console.log('Database seeded successfully.');
+}
+
+// Seed books catalog if empty
+const bookCount = db.prepare('SELECT COUNT(*) as count FROM books').get();
+if (bookCount.count === 0) {
+  const insertBook = db.prepare(`
+    INSERT INTO books (title, author, isbn, category, call_no, type, total_copies, available_copies, published_year, added_at)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+  `);
+  const b = '2026-01-01 08:00:00';
+  insertBook.run('Noli Me Tangere', 'Jose Rizal', '978-971-10-1723-7', 'Filipino Literature', 'FIL-001', 'book', 2, 1, 1887, b);
+  insertBook.run('El Filibusterismo', 'Jose Rizal', '978-971-10-1724-4', 'Filipino Literature', 'FIL-002', 'book', 2, 1, 1891, b);
+  insertBook.run('Florante at Laura', 'Francisco Balagtas', null, 'Filipino Literature', 'FIL-003', 'book', 2, 2, 1838, b);
+  insertBook.run('Ibong Adarna', 'Anonymous', null, 'Filipino Literature', 'FIL-004', 'book', 1, 1, 1700, b);
+  insertBook.run('The Alchemist', 'Paulo Coelho', '978-0-06-231609-7', 'Fiction', 'FIC-002', 'book', 3, 2, 1988, b);
+  insertBook.run('1984', 'George Orwell', '978-0-452-28423-4', 'Fiction', 'FIC-003', 'book', 2, 1, 1949, b);
+  insertBook.run('Pride and Prejudice', 'Jane Austen', '978-0-14-143951-8', 'Fiction', 'FIC-004', 'book', 2, 1, 1813, b);
+  insertBook.run('The Great Gatsby', 'F. Scott Fitzgerald', '978-0-7432-7356-5', 'Fiction', 'FIC-005', 'book', 2, 1, 1925, b);
+  insertBook.run("Harry Potter and the Sorcerer's Stone", 'J.K. Rowling', '978-0-590-35340-3', 'Fiction', 'FIC-006', 'book', 3, 3, 1997, b);
+  insertBook.run('To Kill a Mockingbird', 'Harper Lee', '978-0-06-112008-4', 'Fiction', 'FIC-007', 'book', 2, 1, 1960, b);
+  insertBook.run('The Da Vinci Code', 'Dan Brown', '978-0-385-50420-5', 'Mystery', 'FIC-008', 'book', 2, 2, 2003, b);
+  insertBook.run('Sapiens: A Brief History of Humankind', 'Yuval Noah Harari', '978-0-06-231609-7', 'History', 'HIS-001', 'book', 2, 2, 2011, b);
+  insertBook.run('Cosmos', 'Carl Sagan', '978-0-345-33135-9', 'Science', 'SCI-001', 'book', 2, 2, 1980, b);
+  insertBook.run('National Geographic', 'Various', null, 'Science', 'MAG-001', 'magazine', 5, 5, null, b);
+  insertBook.run('Time Magazine', 'Various', null, 'News & Current Events', 'MAG-002', 'magazine', 3, 3, null, b);
+  insertBook.run('Ang Paboritong Libro ni Hudas', 'Bob Ong', null, 'Filipino Literature', 'FIL-005', 'book', 2, 2, 2004, b);
+  insertBook.run('Ang Mga Kaibigan ni Mama Rosa', 'Danton Remoto', null, 'Filipino Literature', 'FIL-006', 'book', 1, 1, 2012, b);
+  insertBook.run('The Midnight Library', 'Matt Haig', '978-0-525-55947-4', 'Fiction', 'FIC-009', 'book', 2, 2, 2020, b);
+  insertBook.run('Thinking, Fast and Slow', 'Daniel Kahneman', '978-0-374-27563-1', 'Psychology', 'PSY-001', 'book', 2, 2, 2011, b);
+  insertBook.run('Rich Dad Poor Dad', 'Robert T. Kiyosaki', '978-1-61268-120-4', 'Finance', 'BUS-001', 'book', 3, 3, 1997, b);
+  console.log('Books catalog seeded successfully.');
 }
 
 // Helper function to log activity

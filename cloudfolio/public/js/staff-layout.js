@@ -21,6 +21,7 @@
 
   const navItems = [
     { href: '/staff/dashboard.html', label: 'Dashboard', icon: 'layout-dashboard' },
+    { href: '/staff/catalog.html', label: 'Book Catalog', icon: 'book-copy' },
     { href: '/staff/loans.html', label: 'Loans & Checkouts', icon: 'book-open' },
     { href: '/staff/overdue.html', label: 'Overdue Queue', icon: 'alert-circle' },
     { href: '/staff/fines.html', label: 'Fines & Payments', icon: 'banknote' },

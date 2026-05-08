@@ -33,6 +33,7 @@ app.use('/api/notifications', require('./routes/notifications'));
 app.use('/api/staff', require('./routes/staff'));
 app.use('/api/settings', require('./routes/settings'));
 app.use('/api/logs', require('./routes/logs'));
+app.use('/api/books', require('./routes/books'));
 
 // Fallthrough: serve 404.html for unknown routes
 app.use((req, res) => {

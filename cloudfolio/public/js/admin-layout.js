@@ -21,6 +21,7 @@
 
   const mainNav = [
     { href: '/admin/dashboard.html', label: 'Dashboard', icon: 'layout-dashboard' },
+    { href: '/admin/catalog.html', label: 'Book Catalog', icon: 'book-copy' },
     { href: '/admin/loans.html', label: 'Loans & Checkouts', icon: 'book-open' },
     { href: '/admin/overdue.html', label: 'Overdue Queue', icon: 'alert-circle' },
     { href: '/admin/fines.html', label: 'Fines & Payments', icon: 'banknote' },
