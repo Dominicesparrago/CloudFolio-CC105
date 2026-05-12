@@ -1,0 +1,14 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(Get-ChildItem -Path \"c:\\\\Users\\\\Dominic\\\\Desktop\\\\CC105 - Redesign\\\\cloudfolio\" -Recurse)",
+      "Bash(Select-Object -Property FullName, PSIsContainer)",
+      "Bash(Remove-Item -Path \"c:\\\\Users\\\\Dominic\\\\Desktop\\\\CC105 - Redesign\\\\cloudfolio\\\\db\\\\cloudfolio.db\" -ErrorAction SilentlyContinue)",
+      "Bash(Remove-Item -Path \"c:\\\\Users\\\\Dominic\\\\Desktop\\\\CC105 - Redesign\\\\cloudfolio\\\\db\\\\cloudfolio.db-shm\" -ErrorAction SilentlyContinue)",
+      "Bash(Remove-Item -Path \"c:\\\\Users\\\\Dominic\\\\Desktop\\\\CC105 - Redesign\\\\cloudfolio\\\\db\\\\cloudfolio.db-wal\" -ErrorAction SilentlyContinue)",
+      "Bash(Write-Host \"Database files cleared.\")",
+      "Bash(Get-ChildItem -Recurse -Directory)",
+      "Bash(Select-Object FullName)"
+    ]
+  }
+}

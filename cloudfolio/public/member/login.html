@@ -88,9 +88,7 @@
     .left-content { position: relative; text-align: center; max-width: 320px; }
 
     .left-icon {
-      margin-bottom: 2rem;
-      color: rgb(var(--accent));
-      opacity: 0.75;
+      margin-bottom: 0;
     }
 
     .left-title {
@@ -151,15 +149,12 @@
     .form-card { width: 100%; max-width: 400px; }
 
     .brand {
-      font-family: 'Crimson Pro', Georgia, serif;
-      font-size: 1.875rem;
-      font-weight: 700;
-      color: var(--heading);
-      margin-bottom: 1.75rem;
-      display: block;
+      margin-bottom: 2rem;
+      display: flex;
+      justify-content: center;
       text-decoration: none;
     }
-    .brand span { color: rgb(var(--accent)); }
+    .brand img { height: 130px; width: auto; display: block; filter: drop-shadow(0 2px 12px rgba(208,138,46,0.3)); }
 
     .form-heading { font-family: 'Crimson Pro', Georgia, serif; font-size: 1.625rem; font-weight: 700; color: var(--heading); margin-bottom: 0.25rem; }
     .form-sub { font-size: 0.875rem; color: var(--text-muted); margin-bottom: 1.875rem; }
@@ -304,7 +299,7 @@
   <div class="auth-left">
     <div class="left-content">
       <div class="left-icon">
-        <i data-lucide="book-open" style="width:72px;height:72px;stroke-width:1.25;"></i>
+        <img src="/images/cloudfolio-logo.png" alt="CloudFolio" style="height:220px;width:auto;opacity:0.95;filter:drop-shadow(0 8px 32px rgba(208,138,46,0.35));margin-bottom:1.5rem;">
       </div>
       <h1 class="left-title">Welcome Back</h1>
       <p class="left-desc">Access your library account to view loans, track due dates, and manage your reading journey.</p>
@@ -315,7 +310,9 @@
   <div class="auth-right">
     <div class="form-card fade-in">
 
-      <a href="/index.html" class="brand">Cloud<span>Folio</span></a>
+      <a href="/index.html" class="brand">
+        <img src="/images/cloudfolio-logo.png" alt="CloudFolio">
+      </a>
 
       <h2 class="form-heading">Member Sign In</h2>
       <p class="form-sub">Access your library account</p>

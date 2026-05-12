@@ -27,6 +27,7 @@
     { href: '/staff/fines.html', label: 'Fines & Payments', icon: 'banknote' },
     { href: '/staff/members.html', label: 'Members', icon: 'users' },
     { href: '/staff/notifications.html', label: 'Notifications', icon: 'bell' },
+    { href: '/staff/calendar.html', label: 'Class Calendar', icon: 'calendar-x' },
   ];
 
   function isActive(href) {

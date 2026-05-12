@@ -1,0 +1,282 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Class Calendar — CloudFolio Staff</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800&family=Crimson+Pro:ital,wght@0,400;0,600;0,700;1,400&family=Courier+Prime:wght@400;700&display=swap" rel="stylesheet">
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>tailwind.config = { darkMode: 'class' }</script>
+  <link rel="stylesheet" href="/css/main.css">
+  <script src="/js/theme.js"></script>
+  <script src="/js/api.js"></script>
+  <script src="/js/toast.js"></script>
+  <script src="/js/ui.js"></script>
+  <script src="https://unpkg.com/lucide@latest/dist/umd/lucide.js"></script>
+  <style>
+    .cal-grid {
+      display: grid;
+      grid-template-columns: repeat(7, 1fr);
+      gap: 4px;
+    }
+    .cal-day-header {
+      text-align: center;
+      font-size: 0.75rem;
+      font-weight: 600;
+      color: rgb(var(--text-muted));
+      padding: 0.375rem 0;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+    }
+    .cal-day {
+      aspect-ratio: 1;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      border-radius: 8px;
+      font-size: 0.875rem;
+      font-weight: 500;
+      border: 1.5px solid transparent;
+      position: relative;
+      min-height: 44px;
+      gap: 2px;
+    }
+    .cal-day-empty { opacity: 0; pointer-events: none; }
+    .cal-day-today {
+      border-color: rgb(var(--accent));
+      background: rgba(var(--accent)/0.1);
+      font-weight: 700;
+      color: rgb(var(--accent));
+    }
+    .cal-day-suspended {
+      background: rgba(234,179,8,0.15);
+      border-color: rgba(234,179,8,0.5);
+      color: rgb(234,179,8);
+    }
+    .cal-day-past { opacity: 0.45; }
+    .cal-day-label {
+      font-size: 0.625rem;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.04em;
+      opacity: 0.75;
+    }
+    .cal-nav-btn {
+      background: rgb(var(--surface-2));
+      border: 1.5px solid rgb(var(--border));
+      border-radius: 6px;
+      padding: 0.375rem 0.625rem;
+      cursor: pointer;
+      color: rgb(var(--text));
+      font-size: 0.875rem;
+      display: flex;
+      align-items: center;
+      gap: 0.25rem;
+      transition: all 0.15s;
+    }
+    .cal-nav-btn:hover { background: rgba(var(--accent)/0.1); border-color: rgb(var(--accent)); color: rgb(var(--accent)); }
+    .suspended-chip {
+      display: inline-flex;
+      align-items: center;
+      gap: 0.375rem;
+      padding: 0.3125rem 0.75rem;
+      border-radius: 9999px;
+      background: rgba(234,179,8,0.12);
+      border: 1.5px solid rgba(234,179,8,0.35);
+      color: rgb(234,179,8);
+      font-size: 0.8125rem;
+      font-weight: 500;
+    }
+    .legend-dot {
+      width: 12px; height: 12px; border-radius: 3px; flex-shrink: 0;
+    }
+  </style>
+</head>
+<body data-page-title="Class Calendar">
+  <div id="sidebar-container"></div>
+  <div class="main-content">
+    <div id="topbar-container"></div>
+    <div class="page-body fade-in">
+
+      <div style="display:grid;grid-template-columns:1fr 300px;gap:1.25rem;align-items:start;">
+
+        <!-- Calendar Card -->
+        <div class="card">
+          <div class="card-header" style="flex-wrap:wrap;gap:0.75rem;">
+            <div style="display:flex;align-items:center;gap:0.5rem;">
+              <i data-lucide="calendar-x" style="width:16px;height:16px;color:rgb(var(--danger));"></i>
+              <span class="card-title">Class Calendar</span>
+            </div>
+            <div style="display:flex;align-items:center;gap:0.625rem;">
+              <button class="cal-nav-btn" id="btn-prev">
+                <i data-lucide="chevron-left" style="width:14px;height:14px;"></i>
+              </button>
+              <span id="month-label" style="font-size:1rem;font-weight:700;min-width:140px;text-align:center;color:rgb(var(--text));"></span>
+              <button class="cal-nav-btn" id="btn-next">
+                <i data-lucide="chevron-right" style="width:14px;height:14px;"></i>
+              </button>
+              <button class="cal-nav-btn" id="btn-today" style="font-size:0.8125rem;margin-left:0.25rem;">Today</button>
+            </div>
+          </div>
+
+          <!-- Info banner -->
+          <div style="margin:0 1.25rem 0.875rem;padding:0.625rem 0.875rem;border-radius:8px;background:rgba(var(--info,59 130 246)/0.08);border:1px solid rgba(var(--info,59 130 246)/0.2);display:flex;align-items:center;gap:0.5rem;">
+            <i data-lucide="info" style="width:14px;height:14px;color:rgb(var(--info,59,130,246));flex-shrink:0;"></i>
+            <span style="font-size:0.8125rem;color:rgb(var(--text-secondary));">Highlighted days are suspended — students are <strong>not fined</strong> for these dates. Only admins can mark/unmark days.</span>
+          </div>
+
+          <!-- Legend -->
+          <div style="display:flex;gap:1rem;padding:0 1.25rem 0.875rem;flex-wrap:wrap;">
+            <div style="display:flex;align-items:center;gap:0.375rem;font-size:0.75rem;color:rgb(var(--text-muted));">
+              <div class="legend-dot" style="background:rgba(var(--accent)/0.15);border:1.5px solid rgb(var(--accent));"></div>Today
+            </div>
+            <div style="display:flex;align-items:center;gap:0.375rem;font-size:0.75rem;color:rgb(var(--text-muted));">
+              <div class="legend-dot" style="background:rgba(234,179,8,0.15);border:1.5px solid rgba(234,179,8,0.5);"></div>Suspended (No Fine)
+            </div>
+          </div>
+
+          <div style="padding:0 1.25rem 1.25rem;">
+            <div class="cal-grid">
+              <div class="cal-day-header">Sun</div>
+              <div class="cal-day-header">Mon</div>
+              <div class="cal-day-header">Tue</div>
+              <div class="cal-day-header">Wed</div>
+              <div class="cal-day-header">Thu</div>
+              <div class="cal-day-header">Fri</div>
+              <div class="cal-day-header">Sat</div>
+            </div>
+            <div class="cal-grid" id="cal-body" style="margin-top:4px;"></div>
+          </div>
+        </div>
+
+        <!-- Sidebar -->
+        <div class="card" style="position:sticky;top:1rem;">
+          <div class="card-header">
+            <span class="card-title">Suspended Days</span>
+            <span id="suspended-count" class="badge badge-overdue">0</span>
+          </div>
+          <div style="padding:0 1rem 1rem;">
+            <p style="font-size:0.8125rem;color:rgb(var(--text-secondary));margin-bottom:0.875rem;line-height:1.5;">
+              When calculating overdue fines, these dates are excluded. Adjust fine amounts accordingly.
+            </p>
+            <div id="suspended-list" style="display:flex;flex-direction:column;gap:0.5rem;">
+              <div style="color:rgb(var(--text-muted));font-size:0.8125rem;text-align:center;padding:1rem 0;">
+                No suspended days this month.
+              </div>
+            </div>
+          </div>
+        </div>
+
+      </div>
+    </div>
+  </div>
+
+  <script>window.PAGE_TITLE = 'Class Calendar';</script>
+  <script src="/js/staff-layout.js"></script>
+  <script>
+    lucide.createIcons();
+
+    const MONTHS = ['January','February','March','April','May','June','July','August','September','October','November','December'];
+    const today = new Date(); today.setHours(0,0,0,0);
+
+    let viewYear = today.getFullYear();
+    let viewMonth = today.getMonth();
+    let suspendedDates = new Set();
+
+    function pad(n) { return String(n).padStart(2,'0'); }
+    function toDateStr(y, m, d) { return `${y}-${pad(m+1)}-${pad(d)}`; }
+
+    async function loadMonth() {
+      let data = [];
+      try {
+        data = await API.get(`/calendar?year=${viewYear}&month=${viewMonth + 1}`);
+        suspendedDates = new Set(data.map(d => d.date));
+      } catch (e) {
+        suspendedDates = new Set();
+        showToast('Could not load suspended days. Calendar shown without highlights.', 'warning');
+      }
+      renderCalendar();
+      renderList(data);
+    }
+
+    function renderCalendar() {
+      document.getElementById('month-label').textContent = `${MONTHS[viewMonth]} ${viewYear}`;
+      const body = document.getElementById('cal-body');
+      body.innerHTML = '';
+
+      const firstDay = new Date(viewYear, viewMonth, 1).getDay();
+      const daysInMonth = new Date(viewYear, viewMonth + 1, 0).getDate();
+
+      for (let i = 0; i < firstDay; i++) {
+        const el = document.createElement('div');
+        el.className = 'cal-day cal-day-empty';
+        body.appendChild(el);
+      }
+
+      for (let d = 1; d <= daysInMonth; d++) {
+        const dateStr = toDateStr(viewYear, viewMonth, d);
+        const cellDate = new Date(viewYear, viewMonth, d);
+        const isToday = cellDate.getTime() === today.getTime();
+        const isSuspended = suspendedDates.has(dateStr);
+        const isPast = cellDate < today && !isToday;
+
+        const el = document.createElement('div');
+        el.className = 'cal-day';
+        if (isToday) el.classList.add('cal-day-today');
+        if (isSuspended) el.classList.add('cal-day-suspended');
+        if (isPast) el.classList.add('cal-day-past');
+
+        el.innerHTML = `
+          <span>${d}</span>
+          ${isSuspended ? '<span class="cal-day-label">No Fine</span>' : ''}
+        `;
+        body.appendChild(el);
+      }
+    }
+
+    function renderList(data) {
+      const list = document.getElementById('suspended-list');
+      document.getElementById('suspended-count').textContent = data.length;
+
+      if (data.length === 0) {
+        list.innerHTML = `<div style="color:rgb(var(--text-muted));font-size:0.8125rem;text-align:center;padding:1rem 0;">No suspended days this month.</div>`;
+        return;
+      }
+
+      list.innerHTML = data.map(item => `
+        <div class="suspended-chip">
+          <i data-lucide="calendar-minus" style="width:13px;height:13px;flex-shrink:0;"></i>
+          <div style="flex:1;min-width:0;">
+            <div style="font-weight:600;">${formatDate(item.date)}</div>
+            ${item.reason ? `<div style="font-size:0.75rem;opacity:0.7;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${item.reason}</div>` : ''}
+          </div>
+        </div>
+      `).join('');
+
+      lucide.createIcons({ nodes: [list] });
+    }
+
+    document.getElementById('btn-prev').addEventListener('click', () => {
+      viewMonth--;
+      if (viewMonth < 0) { viewMonth = 11; viewYear--; }
+      loadMonth();
+    });
+
+    document.getElementById('btn-next').addEventListener('click', () => {
+      viewMonth++;
+      if (viewMonth > 11) { viewMonth = 0; viewYear++; }
+      loadMonth();
+    });
+
+    document.getElementById('btn-today').addEventListener('click', () => {
+      viewYear = today.getFullYear();
+      viewMonth = today.getMonth();
+      loadMonth();
+    });
+
+    loadMonth();
+  </script>
+</body>
+</html>

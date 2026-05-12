@@ -2,6 +2,14 @@ const express = require('express');
 const router = express.Router();
 const { db, logActivity } = require('../db/database');
 
+function requireStaff(req, res, next) {
+  if (!req.session.user) return res.status(401).json({ error: 'Not authenticated.' });
+  if (!['staff', 'admin'].includes(req.session.user.role)) {
+    return res.status(403).json({ error: 'Access denied.' });
+  }
+  next();
+}
+
 function requireAdmin(req, res, next) {
   if (!req.session.user) return res.status(401).json({ error: 'Not authenticated.' });
   if (req.session.user.role !== 'admin') {
@@ -10,8 +18,8 @@ function requireAdmin(req, res, next) {
   next();
 }
 
-// GET /api/settings - Return all settings as key-value object
-router.get('/', requireAdmin, (req, res) => {
+// GET /api/settings - Return all settings as key-value object (staff can read for fine rates)
+router.get('/', requireStaff, (req, res) => {
   const rows = db.prepare('SELECT * FROM system_settings').all();
   const settings = {};
   const meta = {};

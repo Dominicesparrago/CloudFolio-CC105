@@ -233,7 +233,11 @@ function statusBadge(status, label) {
 function formatDate(dateStr) {
   if (!dateStr) return '—';
   try {
-    const d = new Date(dateStr.includes('T') ? dateStr : dateStr + 'T00:00:00');
+    let normalized;
+    if (dateStr.includes('T')) normalized = dateStr;
+    else if (dateStr.includes(' ')) normalized = dateStr.replace(' ', 'T');
+    else normalized = dateStr + 'T00:00:00';
+    const d = new Date(normalized);
     return d.toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' });
   } catch {
     return dateStr;

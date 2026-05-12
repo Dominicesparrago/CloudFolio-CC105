@@ -20,6 +20,17 @@
   <div class="main-content">
     <div id="topbar-container"></div>
     <div class="page-body fade-in">
+      <!-- Period Filter -->
+      <div style="display:flex;align-items:center;gap:0.5rem;margin-bottom:0.875rem;flex-wrap:wrap;">
+        <span style="font-size:0.8125rem;color:rgb(var(--text-muted));font-weight:500;">Period:</span>
+        <div id="period-pills" style="display:flex;gap:0.375rem;flex-wrap:wrap;">
+          <button class="period-pill" data-period="today">Today</button>
+          <button class="period-pill" data-period="week">This Week</button>
+          <button class="period-pill" data-period="month">This Month</button>
+          <button class="period-pill period-pill-active" data-period="all">All Time</button>
+        </div>
+      </div>
+
       <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:1rem;margin-bottom:1.25rem;">
         <div class="stat-card">
           <div class="stat-icon" style="background:rgba(var(--danger)/0.12);">
@@ -34,6 +45,22 @@
           <div><div class="stat-label">Total Collected</div><div class="stat-value" id="stat-collected">—</div></div>
         </div>
       </div>
+
+      <style>
+        .period-pill {
+          padding: 0.3125rem 0.75rem;
+          border-radius: 9999px;
+          border: 1.5px solid rgb(var(--border));
+          font-size: 0.8125rem;
+          font-weight: 500;
+          cursor: pointer;
+          background: transparent;
+          color: rgb(var(--text-muted));
+          transition: all 0.15s;
+        }
+        .period-pill:hover { border-color: rgb(var(--accent)); color: rgb(var(--accent)); }
+        .period-pill-active { background: rgb(var(--accent)); border-color: rgb(var(--accent)); color: #fff !important; }
+      </style>
       <div class="card">
         <div class="card-header"><span class="card-title">Fines & Payments</span></div>
         <div class="filter-bar">
@@ -58,6 +85,33 @@
 
     let allFines = [];
     let tableCtrl = null;
+    let activePeriod = 'all';
+
+    function inPeriod(dateStr, period) {
+      if (!dateStr || period === 'all') return true;
+      const d = new Date(dateStr.replace(' ', 'T'));
+      if (isNaN(d)) return true;
+      const today = new Date(); today.setHours(0,0,0,0);
+      if (period === 'today') {
+        return d.getFullYear() === today.getFullYear() && d.getMonth() === today.getMonth() && d.getDate() === today.getDate();
+      }
+      if (period === 'week') {
+        const start = new Date(today); start.setDate(today.getDate() - today.getDay());
+        const end = new Date(start); end.setDate(start.getDate() + 6); end.setHours(23,59,59,999);
+        return d >= start && d <= end;
+      }
+      if (period === 'month') {
+        return d.getFullYear() === today.getFullYear() && d.getMonth() === today.getMonth();
+      }
+      return true;
+    }
+
+    function updateStats() {
+      const pending = allFines.filter(f => f.status === 'pending' && inPeriod(f.created_at, activePeriod)).reduce((s,f) => s+f.amount, 0);
+      const collected = allFines.filter(f => f.status === 'paid' && inPeriod(f.paid_date || f.created_at, activePeriod)).reduce((s,f) => s+f.amount, 0);
+      document.getElementById('stat-pending').textContent = formatCurrency(pending);
+      document.getElementById('stat-collected').textContent = formatCurrency(collected);
+    }
 
     function applyFilters() {
       const status = document.getElementById('filter-status').value;
@@ -65,18 +119,27 @@
       const filtered = allFines.filter(f => {
         const matchStatus = !status || f.status === status;
         const matchSearch = !search || (f.member_name && f.member_name.toLowerCase().includes(search));
-        return matchStatus && matchSearch;
+        const refDate = f.status === 'paid' ? (f.paid_date || f.created_at) : f.created_at;
+        const matchPeriod = inPeriod(refDate, activePeriod);
+        return matchStatus && matchSearch && matchPeriod;
       });
       if (tableCtrl) tableCtrl.update(filtered);
     }
 
+    document.getElementById('period-pills').addEventListener('click', e => {
+      const pill = e.target.closest('.period-pill');
+      if (!pill) return;
+      document.querySelectorAll('.period-pill').forEach(p => p.classList.remove('period-pill-active'));
+      pill.classList.add('period-pill-active');
+      activePeriod = pill.dataset.period;
+      updateStats();
+      applyFilters();
+    });
+
     async function loadFines() {
       try {
         allFines = await API.get('/fines');
-        const pending = allFines.filter(f=>f.status==='pending').reduce((s,f)=>s+f.amount,0);
-        const collected = allFines.filter(f=>f.status==='paid').reduce((s,f)=>s+f.amount,0);
-        document.getElementById('stat-pending').textContent = formatCurrency(pending);
-        document.getElementById('stat-collected').textContent = formatCurrency(collected);
+        updateStats();
 
         tableCtrl = renderTable('fines-table', [
           { key: 'member_name', label: 'Member', render: v => `<span style="font-weight:600;">${v}</span>` },

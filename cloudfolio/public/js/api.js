@@ -29,7 +29,10 @@ const API = {
     }
 
     if (res.status === 401) {
-      window.location.href = API._getLoginRedirect();
+      const currentPath = window.location.pathname;
+      if (!currentPath.endsWith('login.html')) {
+        window.location.href = API._getLoginRedirect();
+      }
       throw new Error('Not authenticated.');
     }
 

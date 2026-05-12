@@ -27,6 +27,7 @@
     { href: '/admin/fines.html', label: 'Fines & Payments', icon: 'banknote' },
     { href: '/admin/members.html', label: 'Members', icon: 'users' },
     { href: '/admin/notifications.html', label: 'Notifications', icon: 'bell' },
+    { href: '/admin/calendar.html', label: 'Class Calendar', icon: 'calendar-x' },
   ];
 
   const adminNav = [

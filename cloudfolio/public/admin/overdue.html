@@ -27,9 +27,9 @@
             <span class="card-title">Overdue Queue</span>
             <span id="overdue-count" class="badge badge-overdue" style="margin-left:0.25rem;"></span>
           </div>
-          <button id="btn-bulk-notify" class="btn btn-primary btn-sm" style="gap:0.375rem;" disabled>
-            <i data-lucide="bell" style="width:14px;height:14px;"></i>
-            Send Overdue Notices
+          <button id="btn-bulk-notify" class="btn btn-sm" disabled title="SMS dispatch unavailable — Semaphore subscription pending" style="gap:0.375rem;opacity:0.55;cursor:not-allowed;background:rgba(208,138,46,0.12);color:rgb(208,138,46);border:1px solid rgba(208,138,46,0.3);">
+            <i data-lucide="clock" style="width:14px;height:14px;"></i>
+            SMS — Coming Soon
           </button>
         </div>
         <div id="overdue-table"></div>
@@ -44,24 +44,72 @@
 
     let allOverdue = [];
     let tableCtrl = null;
+    let fineRate = 10.00;
+    let fineCap = 200.00;
+    let suspendedSet = new Set();
+
+    function getAdjustedFineDays(dueDateStr) {
+      const due = new Date(dueDateStr + 'T00:00:00');
+      const now = new Date(); now.setHours(0,0,0,0);
+      if (now <= due) return 0;
+      let days = 0;
+      const cur = new Date(due);
+      cur.setDate(cur.getDate() + 1);
+      while (cur <= now) {
+        const d = cur.toISOString().split('T')[0];
+        if (!suspendedSet.has(d)) days++;
+        cur.setDate(cur.getDate() + 1);
+      }
+      return days;
+    }
+
+    function getAdjustedFine(dueDateStr) {
+      return Math.min(getAdjustedFineDays(dueDateStr) * fineRate, fineCap);
+    }
 
     async function loadOverdue() {
       try {
-        allOverdue = await API.get('/loans/overdue');
+        const [overdueData, settings] = await Promise.all([
+          API.get('/loans/overdue'),
+          API.get('/settings').catch(() => null)
+        ]);
+
+        allOverdue = overdueData;
+
+        if (settings && settings.settings) {
+          fineRate = parseFloat(settings.settings.fine_per_day) || 10.00;
+          fineCap = parseFloat(settings.settings.fine_cap) || 200.00;
+        }
+
+        try {
+          const suspendedData = await API.get('/calendar');
+          suspendedSet = new Set(suspendedData.map(d => d.date));
+        } catch (_) {
+          suspendedSet = new Set();
+        }
+
         document.getElementById('overdue-count').textContent = allOverdue.length;
 
         tableCtrl = renderTable('overdue-table', [
           { key: 'member_name', label: 'Member', render: v => `<span style="font-weight:600;">${v}</span>` },
           { key: 'item_title', label: 'Item', render: (v, row) => `<div style="max-width:200px;"><div style="font-weight:500;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${v}</div><div style="font-size:0.75rem;color:rgb(var(--text-muted));">${row.item_author||''}</div></div>` },
           { key: 'due_date', label: 'Due Date', render: v => `<span style="color:rgb(var(--danger));">${formatDate(v)}</span>` },
-          { key: 'due_date', label: 'Days Overdue', render: v => { const d=daysOverdue(v); return `<span style="color:rgb(var(--danger));font-weight:700;">${d} day${d!==1?'s':''}</span>`; }},
-          { key: 'due_date', label: 'Fine Accrued', sortable: false, render: v => `<span style="font-weight:600;color:rgb(var(--accent));">${formatCurrency(daysOverdue(v)*10)}</span>` },
+          { key: 'due_date', label: 'Days Overdue', render: v => {
+            const raw = daysOverdue(v); const adj = getAdjustedFineDays(v); const diff = raw - adj;
+            return `<span style="color:rgb(var(--danger));font-weight:700;">${raw} day${raw!==1?'s':''}</span>`
+              + (diff > 0 ? ` <span style="font-size:0.7rem;color:rgb(var(--text-muted));">(${diff} suspended)</span>` : '');
+          }},
+          { key: 'due_date', label: 'Fine Accrued', sortable: false, render: v => {
+            const fine = getAdjustedFine(v);
+            const isCapped = getAdjustedFineDays(v) * fineRate >= fineCap;
+            return `<span style="font-weight:600;color:rgb(var(--accent));">${formatCurrency(fine)}</span>${isCapped ? ' <span style="font-size:0.7rem;background:rgba(var(--accent)/0.15);color:rgb(var(--accent));padding:1px 5px;border-radius:4px;font-weight:600;">Cap</span>' : ''}`;
+          }},
           { key: 'status', label: 'Status', render: v => statusBadge(v) },
           { key: 'id', label: 'Actions', sortable: false, render: (v, row) => `
             <div style="display:flex;gap:0.375rem;flex-wrap:wrap;">
-              <button class="btn btn-sm btn-ghost action-notify" data-id="${v}" data-member-id="${row.member_id}" data-title="${row.item_title.replace(/"/g,'&quot;')}" style="color:rgb(var(--info));">
-                <i data-lucide="bell" style="width:12px;height:12px;"></i> Notice
-              </button>
+              <span title="SMS unavailable — Coming Soon" style="display:inline-flex;align-items:center;gap:0.3rem;padding:0.25rem 0.5rem;border-radius:0.375rem;font-size:0.75rem;font-weight:600;background:rgba(208,138,46,0.1);color:rgb(208,138,46);border:1px solid rgba(208,138,46,0.2);cursor:default;">
+                <i data-lucide="clock" style="width:11px;height:11px;"></i> SMS Soon
+              </span>
               <button class="btn btn-sm btn-success action-return" data-id="${v}">Return</button>
             </div>
           `}
@@ -72,15 +120,6 @@
         document.getElementById('overdue-table').addEventListener('click', async e => {
           const notifyBtn = e.target.closest('.action-notify');
           const returnBtn = e.target.closest('.action-return');
-          if (notifyBtn) {
-            e.stopPropagation();
-            notifyBtn.disabled = true;
-            try {
-              await API.post('/notifications', { member_id: parseInt(notifyBtn.dataset.memberId), title: 'Overdue Notice', message: `Your loan of "${notifyBtn.dataset.title}" is overdue. Please return immediately.`, type: 'overdue' });
-              showToast('Notice created!', 'success');
-            } catch (err) { showToast(err.message, 'error'); }
-            notifyBtn.disabled = false;
-          }
           if (returnBtn) {
             e.stopPropagation();
             if (!confirm('Confirm return?')) return;
@@ -98,29 +137,6 @@
       } catch (err) { showToast('Failed to load overdue loans.', 'error'); }
     }
 
-    function updateBulkBtn() {
-      const selected = tableCtrl ? tableCtrl.getSelected() : [];
-      const btn = document.getElementById('btn-bulk-notify');
-      btn.disabled = selected.length === 0;
-      btn.innerHTML = selected.length > 0 ? `<i data-lucide="bell" style="width:14px;height:14px;"></i> Send Notices (${selected.length})` : '<i data-lucide="bell" style="width:14px;height:14px;"></i> Send Overdue Notices';
-      lucide.createIcons({ nodes: [btn] });
-    }
-
-    document.getElementById('btn-bulk-notify').addEventListener('click', async () => {
-      const selected = tableCtrl ? tableCtrl.getSelected() : [];
-      if (!selected.length) return;
-      const btn = document.getElementById('btn-bulk-notify');
-      btn.disabled = true; btn.innerHTML = '<span class="spinner"></span> Sending...';
-      let sent = 0;
-      for (const loan of selected) {
-        try {
-          await API.post('/notifications', { member_id: loan.member_id, title: 'Overdue Notice', message: `Your loan of "${loan.item_title}" is overdue.`, type: 'overdue' });
-          sent++;
-        } catch (_) {}
-      }
-      showToast(`${sent} notice${sent!==1?'s':''} created!`, 'success');
-      updateBulkBtn();
-    });
 
     loadOverdue();
   </script>

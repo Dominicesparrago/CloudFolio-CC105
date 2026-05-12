@@ -137,6 +137,9 @@
     }
 
     function openAddBookModal() {
+      const existingCats = [...new Set(allBooks.map(b => b.category).filter(Boolean))].sort();
+      const catOptions = existingCats.map(c => `<option value="${c}">${c}</option>`).join('');
+
       openModal('Add Book to Catalog', `
         <div class="form-group"><label class="form-label">Title *</label>
           <input type="text" id="add-title" class="form-control" placeholder="Book title">
@@ -164,7 +167,13 @@
         </div>
         <div style="display:grid;grid-template-columns:1fr 1fr;gap:0.75rem;">
           <div class="form-group"><label class="form-label">Category</label>
-            <input type="text" id="add-category" class="form-control" placeholder="e.g. Fiction"></div>
+            <select id="add-category-sel" class="form-control">
+              <option value="">-- Select Category --</option>
+              ${catOptions}
+              <option value="__custom__">Other (type below)…</option>
+            </select>
+            <input type="text" id="add-category-custom" class="form-control" placeholder="Enter new category" style="margin-top:0.375rem;display:none;">
+          </div>
           <div class="form-group"><label class="form-label">ISBN</label>
             <input type="text" id="add-isbn" class="form-control" placeholder="978-..."></div>
         </div>
@@ -177,7 +186,10 @@
           const copies = document.getElementById('add-copies').value;
           const callNo = document.getElementById('add-callno').value.trim();
           const year = document.getElementById('add-year').value.trim();
-          const category = document.getElementById('add-category').value.trim();
+          const catSel = document.getElementById('add-category-sel').value;
+          const category = catSel === '__custom__'
+            ? document.getElementById('add-category-custom').value.trim()
+            : catSel;
           const isbn = document.getElementById('add-isbn').value.trim();
 
           let valid = true;
@@ -199,6 +211,15 @@
           }
         }
       });
+
+      setTimeout(() => {
+        const sel = document.getElementById('add-category-sel');
+        const custom = document.getElementById('add-category-custom');
+        if (sel) sel.addEventListener('change', () => {
+          custom.style.display = sel.value === '__custom__' ? 'block' : 'none';
+          if (sel.value !== '__custom__') custom.value = '';
+        });
+      }, 50);
     }
 
     async function load() {
